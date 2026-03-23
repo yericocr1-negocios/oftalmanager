@@ -32,7 +32,7 @@ export default function Consulta() {
   const [interOI, setInterOI] = useState({...campoVacio})
 
   const dictar = () => {
-    const recognition = new window.webkitSpeechRecognition()
+    const recognition = new (window as any).webkitSpeechRecognition()
     recognition.lang = 'es-PE'
     recognition.continuous = false
     recognition.onresult = (event) => {
