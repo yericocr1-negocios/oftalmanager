@@ -19,12 +19,12 @@ const movimientosIniciales = [
   { id: 4, fecha: '2024-01-15', hora: '15:00', concepto: 'Cirugia - Ana Flores', sucursal: 'Lima', numero: 'OP-004', metodo: 'transferencia', tipo: 'ingreso', monto: 2500 },
 ]
 
-const cuentasCobrarIniciales = [
-  { id: 1, cliente: 'Juan Perez', tipo: 'paciente', dni: '12345678', telefono: '999888777', tipoIngreso: 'lentes', descripcion: 'Lentes progresivos', total: 850, pagado: 400, cuotas: 2, estado: 'parcial', fechaVenta: '2024-01-10', fechaVencimiento: '2024-02-10', vendedor: 'Luis', sede: 'Lima', comprobante: 'boleta', numeroComp: 'B001-00123' },
-  { id: 2, cliente: 'Empresa Vision SAC', tipo: 'empresa', dni: '20123456789', telefono: '01-234-5678', tipoIngreso: 'consulta', descripcion: 'Consultas corporativas', total: 2400, pagado: 0, cuotas: 3, estado: 'pendiente', fechaVenta: '2024-01-12', fechaVencimiento: '2024-01-30', vendedor: 'Ana', sede: 'Lima', comprobante: 'factura', numeroComp: 'F001-00045' },
+const cobrarIniciales = [
+  { id: 1, cliente: 'Juan Perez', empresa: '', tipo: 'paciente', dni: '12345678', telefono: '999888777', tipoIngreso: 'lentes', descripcion: 'Lentes progresivos', total: 850, pagado: 400, cuotas: 2, estado: 'parcial', fechaVenta: '2024-01-10', fechaVencimiento: '2024-02-10', vendedor: 'Luis', sede: 'Lima', comprobante: 'boleta', numeroComp: 'B001-00123' },
+  { id: 2, cliente: 'Empresa Vision SAC', empresa: 'Vision SAC', tipo: 'empresa', dni: '20123456789', telefono: '01-234-5678', tipoIngreso: 'consulta', descripcion: 'Consultas corporativas', total: 2400, pagado: 0, cuotas: 3, estado: 'pendiente', fechaVenta: '2024-01-12', fechaVencimiento: '2024-01-30', vendedor: 'Ana', sede: 'Lima', comprobante: 'factura', numeroComp: 'F001-00045' },
 ]
 
-const cuentasPagarIniciales = [
+const pagarIniciales = [
   { id: 1, proveedor: 'Laboratorio Optico SA', empresa: 'Lab Optico', ruc: '20567890123', tipoProveedor: 'laboratorio', producto: 'Lunas progresivas', cantidad: 50, costoUnitario: 45, total: 2250, pagado: 1000, estado: 'parcial', fechaCompra: '2024-01-05', fechaVencimiento: '2024-02-05', sede: 'Lima', numeroFactura: 'F001-00234' },
   { id: 2, proveedor: 'Importadora Monturas Peru', empresa: 'IMP Peru', ruc: '20456789012', tipoProveedor: 'monturas', producto: 'Monturas titanio', cantidad: 30, costoUnitario: 85, total: 2550, pagado: 0, estado: 'pendiente', fechaCompra: '2024-01-08', fechaVencimiento: '2024-01-25', sede: 'Arequipa', numeroFactura: 'F002-00089' },
 ]
@@ -32,22 +32,20 @@ const cuentasPagarIniciales = [
 export default function Finanzas() {
   const [tab, setTab] = useState('caja')
   const [movimientos, setMovimientos] = useState(movimientosIniciales)
-  const [cuentasCobrar, setCuentasCobrar] = useState(cuentasCobrarIniciales)
-  const [cuentasPagar, setCuentasPagar] = useState(cuentasPagarIniciales)
-  const [mostrarNuevoMov, setMostrarNuevoMov] = useState(false)
-  const [mostrarNuevoCobrar, setMostrarNuevoCobrar] = useState(false)
-  const [mostrarNuevoPagar, setMostrarNuevoPagar] = useState(false)
+  const [cobrar, setCobrar] = useState(cobrarIniciales)
+  const [pagar, setPagar] = useState(pagarIniciales)
+  const [mostrarMov, setMostrarMov] = useState(false)
+  const [mostrarCobrar, setMostrarCobrar] = useState(false)
+  const [mostrarPagar, setMostrarPagar] = useState(false)
 
   const [nuevoMov, setNuevoMov] = useState({ concepto: '', sucursal: '', numero: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
-  const [nuevoCobrar, setNuevoCobrar] = useState({ cliente: '', tipo: 'paciente', dni: '', telefono: '', tipoIngreso: 'consulta', descripcion: '', total: 0, cuotas: 1, fechaVenta: '', fechaVencimiento: '', vendedor: '', sede: '', comprobante: 'boleta', numeroComp: '' })
-  const [nuevoPagar, setNuevoPagar] = useState({ proveedor: '', ruc: '', tipoProveedor: 'laboratorio', producto: '', cantidad: 0, costoUnitario: 0, total: 0, fechaCompra: '', fechaVencimiento: '', sede: '', numeroFactura: '' })
+  const [nuevoCobrar, setNuevoCobrar] = useState({ cliente: '', empresa: '', tipo: 'paciente', dni: '', telefono: '', tipoIngreso: 'consulta', descripcion: '', total: 0, cuotas: 1, fechaVencimiento: '', vendedor: '', sede: '', comprobante: 'boleta', numeroComp: '' })
+  const [nuevoPagar, setNuevoPagar] = useState({ proveedor: '', empresa: '', ruc: '', tipoProveedor: 'laboratorio', producto: '', cantidad: 0, costoUnitario: 0, fechaVencimiento: '', sede: '', numeroFactura: '' })
 
   const ingresos = movimientos.filter(m => m.tipo === 'ingreso').reduce((sum, m) => sum + m.monto, 0)
   const egresos = movimientos.filter(m => m.tipo === 'egreso').reduce((sum, m) => sum + m.monto, 0)
-  const saldo = ingresos - egresos
-
-  const totalCobrar = cuentasCobrar.reduce((sum, c) => sum + (c.total - c.pagado), 0)
-  const totalPagar = cuentasPagar.reduce((sum, c) => sum + (c.total - c.pagado), 0)
+  const totalCobrar = cobrar.reduce((sum, c) => sum + (c.total - c.pagado), 0)
+  const totalPagar = pagar.reduce((sum, c) => sum + (c.total - c.pagado), 0)
 
   const estadoColor: Record<string, string> = {
     pendiente: 'bg-yellow-900 text-yellow-400',
@@ -56,16 +54,22 @@ export default function Finanzas() {
     vencido: 'bg-red-900 text-red-400',
   }
 
-  const guardarMovimiento = () => {
+  const guardarMov = () => {
     const ahora = new Date()
-    setMovimientos([...movimientos, {
-      ...nuevoMov,
-      id: movimientos.length + 1,
-      fecha: ahora.toISOString().split('T')[0],
-      hora: ahora.toTimeString().slice(0, 5),
-    }])
-    setMostrarNuevoMov(false)
+    setMovimientos([...movimientos, { ...nuevoMov, id: movimientos.length + 1, fecha: ahora.toISOString().split('T')[0], hora: ahora.toTimeString().slice(0, 5) }])
+    setMostrarMov(false)
     setNuevoMov({ concepto: '', sucursal: '', numero: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
+  }
+
+  const guardarCobrar = () => {
+    setCobrar([...cobrar, { ...nuevoCobrar, id: cobrar.length + 1, pagado: 0, estado: 'pendiente', fechaVenta: new Date().toISOString().split('T')[0] }])
+    setMostrarCobrar(false)
+  }
+
+  const guardarPagar = () => {
+    const total = nuevoPagar.cantidad * nuevoPagar.costoUnitario
+    setPagar([...pagar, { ...nuevoPagar, id: pagar.length + 1, total, pagado: 0, estado: 'pendiente', fechaCompra: new Date().toISOString().split('T')[0] }])
+    setMostrarPagar(false)
   }
 
   return (
@@ -91,9 +95,9 @@ export default function Finanzas() {
             <p className="text-sm text-gray-400">Control financiero completo</p>
           </div>
           <div>
-            {tab === 'caja' && <button onClick={() => setMostrarNuevoMov(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nuevo movimiento</button>}
-            {tab === 'cobrar' && <button onClick={() => setMostrarNuevoCobrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nueva cuenta por cobrar</button>}
-            {tab === 'pagar' && <button onClick={() => setMostrarNuevoPagar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nueva cuenta por pagar</button>}
+            {tab === 'caja' && <button onClick={() => setMostrarMov(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nuevo movimiento</button>}
+            {tab === 'cobrar' && <button onClick={() => setMostrarCobrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nueva cuenta por cobrar</button>}
+            {tab === 'pagar' && <button onClick={() => setMostrarPagar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nueva cuenta por pagar</button>}
           </div>
         </div>
 
@@ -119,11 +123,7 @@ export default function Finanzas() {
 
           <div className="flex gap-3 mb-6">
             {['caja', 'cobrar', 'pagar'].map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={'px-4 py-2 rounded-lg text-sm transition-all ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}
-              >
+              <button key={t} onClick={() => setTab(t)} className={'px-4 py-2 rounded-lg text-sm transition-all ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
                 {t === 'caja' ? 'Caja' : t === 'cobrar' ? 'Cuentas por cobrar' : 'Cuentas por pagar'}
               </button>
             ))}
@@ -152,9 +152,7 @@ export default function Finanzas() {
                       <td className="px-4 py-3 text-xs text-gray-400 font-mono">{m.numero || '-'}</td>
                       <td className="px-4 py-3 text-sm text-gray-300 capitalize">{m.metodo}</td>
                       <td className="px-4 py-3">
-                        <span className={'text-xs px-2 py-1 rounded-full ' + (m.tipo === 'ingreso' ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400')}>
-                          {m.tipo}
-                        </span>
+                        <span className={'text-xs px-2 py-1 rounded-full ' + (m.tipo === 'ingreso' ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400')}>{m.tipo}</span>
                       </td>
                       <td className={'px-4 py-3 text-sm font-bold ' + (m.tipo === 'ingreso' ? 'text-green-400' : 'text-red-400')}>
                         {m.tipo === 'ingreso' ? '+' : '-'} S/ {m.monto}
@@ -177,13 +175,13 @@ export default function Finanzas() {
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Total</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Pagado</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Pendiente</th>
-                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Vencimiento</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Vence</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Estado</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cuentasCobrar.map((c) => (
+                  {cobrar.map((c) => (
                     <tr key={c.id} className="border-b border-gray-800 hover:bg-gray-800">
                       <td className="px-4 py-3">
                         <p className="text-sm font-medium">{c.cliente}</p>
@@ -220,13 +218,13 @@ export default function Finanzas() {
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Total</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Pagado</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Pendiente</th>
-                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Vencimiento</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Vence</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Estado</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cuentasPagar.map((c) => (
+                  {pagar.map((c) => (
                     <tr key={c.id} className="border-b border-gray-800 hover:bg-gray-800">
                       <td className="px-4 py-3">
                         <p className="text-sm font-medium">{c.proveedor}</p>
@@ -254,12 +252,12 @@ export default function Finanzas() {
         </div>
       </div>
 
-      {mostrarNuevoMov && (
+      {mostrarMov && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold">Nuevo movimiento</h3>
-              <button onClick={() => setMostrarNuevoMov(false)} className="text-gray-400 hover:text-white text-xl">X</button>
+              <button onClick={() => setMostrarMov(false)} className="text-gray-400 hover:text-white text-xl">X</button>
             </div>
             <div className="space-y-4">
               <div>
@@ -301,19 +299,19 @@ export default function Finanzas() {
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setMostrarNuevoMov(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
-              <button onClick={guardarMovimiento} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
+              <button onClick={() => setMostrarMov(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
+              <button onClick={guardarMov} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
             </div>
           </div>
         </div>
       )}
 
-      {mostrarNuevoCobrar && (
+      {mostrarCobrar && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 overflow-auto py-8">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold">Nueva cuenta por cobrar</h3>
-              <button onClick={() => setMostrarNuevoCobrar(false)} className="text-gray-400 hover:text-white text-xl">X</button>
+              <button onClick={() => setMostrarCobrar(false)} className="text-gray-400 hover:text-white text-xl">X</button>
             </div>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -378,19 +376,19 @@ export default function Finanzas() {
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setMostrarNuevoCobrar(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
-              <button onClick={() => { setCuentasCobrar([...cuentasCobrar, {...nuevoCobrar, id: cuentasCobrar.length + 1, pagado: 0, estado: 'pendiente', fechaVenta: new Date().toISOString().split('T')[0], vendedor: '', sede: '', numeroComp: '' }]); setMostrarNuevoCobrar(false) }} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
+              <button onClick={() => setMostrarCobrar(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
+              <button onClick={guardarCobrar} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
             </div>
           </div>
         </div>
       )}
 
-      {mostrarNuevoPagar && (
+      {mostrarPagar && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 overflow-auto py-8">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold">Nueva cuenta por pagar</h3>
-              <button onClick={() => setMostrarNuevoPagar(false)} className="text-gray-400 hover:text-white text-xl">X</button>
+              <button onClick={() => setMostrarPagar(false)} className="text-gray-400 hover:text-white text-xl">X</button>
             </div>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -399,11 +397,15 @@ export default function Finanzas() {
                   <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, proveedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">RUC</label>
-                  <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, ruc: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <label className="text-xs text-gray-400 mb-1 block">Empresa</label>
+                  <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, empresa: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">RUC</label>
+                  <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, ruc: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Tipo de proveedor</label>
                   <select onChange={(e) => setNuevoPagar({...nuevoPagar, tipoProveedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
@@ -414,10 +416,6 @@ export default function Finanzas() {
                     <option value="marketing">Marketing</option>
                     <option value="alquiler">Alquiler</option>
                   </select>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">N° Factura</label>
-                  <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, numeroFactura: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div>
@@ -434,14 +432,18 @@ export default function Finanzas() {
                   <input type="number" onChange={(e) => setNuevoPagar({...nuevoPagar, costoUnitario: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Fecha vencimiento</label>
-                  <input type="date" onChange={(e) => setNuevoPagar({...nuevoPagar, fechaVencimiento: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <label className="text-xs text-gray-400 mb-1 block">N° Factura</label>
+                  <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, numeroFactura: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Fecha vencimiento</label>
+                <input type="date" onChange={(e) => setNuevoPagar({...nuevoPagar, fechaVencimiento: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setMostrarNuevoPagar(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
-              <button onClick={() => { setNuevoPagar({...nuevoPagar, total: nuevoPagar.cantidad * nuevoPagar.costoUnitario}); setCuentasPagar([...cuentasPagar, {...nuevoPagar, id: cuentasPagar.length + 1, pagado: 0, estado: 'pendiente', fechaCompra: new Date().toISOString().split('T')[0], sede: '', total: nuevoPagar.cantidad * nuevoPagar.costoUnitario }]); setMostrarNuevoPagar(false) }} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
+              <button onClick={() => setMostrarPagar(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
+              <button onClick={guardarPagar} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
             </div>
           </div>
         </div>
