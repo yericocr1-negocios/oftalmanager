@@ -12,7 +12,7 @@ const menu = [
   { icon: '⚙️', label: 'Config', href: '/configuracion' },
 ]
 
-const citas = [
+const citasIniciales = [
   { id: 1, hora: '08:00', paciente: 'Juan Perez', doctor: 'Dr. Garcia', especialidad: 'Refraccion', estado: 'confirmada', duracion: 30 },
   { id: 2, hora: '08:30', paciente: 'Maria Lopez', doctor: 'Dr. Garcia', especialidad: 'Catarata', estado: 'programada', duracion: 45 },
   { id: 3, hora: '09:15', paciente: 'Carlos Ramirez', doctor: 'Dra. Torres', especialidad: 'Glaucoma', estado: 'confirmada', duracion: 30 },
@@ -23,18 +23,33 @@ const citas = [
 const colores: Record<string, string> = {
   confirmada: 'bg-green-900 text-green-400',
   programada: 'bg-blue-900 text-blue-400',
-  en_atencion: 'bg-yellow-900 text-yellow-400',
-  atendida: 'bg-gray-800 text-gray-400',
-  cancelada: 'bg-red-900 text-red-400',
+  en_atencion: 'bg-orange-900 text-orange-400',
+  no_vino: 'bg-red-900 text-red-400',
+}
+
+const estadoLabel: Record<string, string> = {
+  confirmada: 'Confirmada',
+  programada: 'Programada',
+  en_atencion: 'En atencion',
+  no_vino: 'No vino',
 }
 
 export default function Agenda() {
+  const [citas, setCitas] = useState(citasIniciales)
   const [mostrar, setMostrar] = useState(false)
   const [filtroDoctor, setFiltroDoctor] = useState('todos')
+  const [especialidadOtro, setEspecialidadOtro] = useState(false)
+  const [nuevaCita, setNuevaCita] = useState({
+    paciente: '', doctor: 'Dr. Garcia', especialidad: '', hora: '', fecha: '', duracion: 30
+  })
 
   const citasFiltradas = filtroDoctor === 'todos'
     ? citas
     : citas.filter(c => c.doctor === filtroDoctor)
+
+  const cambiarEstado = (id: number, nuevoEstado: string) => {
+    setCitas(citas.map(c => c.id === id ? { ...c, estado: nuevoEstado } : c))
+  }
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
@@ -60,9 +75,14 @@ export default function Agenda() {
             <h2 className="text-lg font-semibold">Agenda</h2>
             <p className="text-sm text-gray-400">Citas del dia</p>
           </div>
-          <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
-            + Nueva cita
-          </button>
+          <div className="flex gap-3">
+            <a href="/citas" target="_blank" className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
+              🔗 Link para pacientes
+            </a>
+            <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
+              + Nueva cita
+            </button>
+          </div>
         </div>
 
         <div className="p-8">
@@ -84,8 +104,8 @@ export default function Agenda() {
             {[
               { label: 'Total citas', value: citas.length, color: 'text-white' },
               { label: 'Confirmadas', value: citas.filter(c => c.estado === 'confirmada').length, color: 'text-green-400' },
-              { label: 'En atencion', value: citas.filter(c => c.estado === 'en_atencion').length, color: 'text-yellow-400' },
-              { label: 'Pendientes', value: citas.filter(c => c.estado === 'programada').length, color: 'text-blue-400' },
+              { label: 'En atencion', value: citas.filter(c => c.estado === 'en_atencion').length, color: 'text-orange-400' },
+              { label: 'No vinieron', value: citas.filter(c => c.estado === 'no_vino').length, color: 'text-red-400' },
             ].map((card) => {
               return (
                 <div key={card.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
@@ -116,10 +136,16 @@ export default function Agenda() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={'text-xs px-3 py-1 rounded-full ' + colores[cita.estado]}>
-                        {cita.estado.replace('_', ' ')}
-                      </span>
-                      <button className="text-blue-400 hover:text-blue-300 text-sm">Atender</button>
+                      <select
+                        value={cita.estado}
+                        onChange={(e) => cambiarEstado(cita.id, e.target.value)}
+                        className={'text-xs px-3 py-1 rounded-full border-0 cursor-pointer ' + colores[cita.estado]}
+                      >
+                        <option value="programada">Programada</option>
+                        <option value="confirmada">Confirmada</option>
+                        <option value="en_atencion">En atencion</option>
+                        <option value="no_vino">No vino</option>
+                      </select>
                     </div>
                   </div>
                 )
@@ -139,22 +165,19 @@ export default function Agenda() {
             <div className="space-y-4">
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">Paciente</label>
-                <input type="text" placeholder="Buscar paciente..." className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                <input type="text" placeholder="Nombre del paciente..." onChange={(e) => setNuevaCita({...nuevaCita, paciente: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Doctor</label>
-                  <select className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                  <select onChange={(e) => setNuevaCita({...nuevaCita, doctor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                     <option>Dr. Garcia</option>
                     <option>Dra. Torres</option>
                   </select>
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Especialidad</label>
-                  <select id="especialidad" onChange={(e) => {
-                    const otro = document.getElementById('otro-especialidad')
-                    if (otro) otro.style.display = e.target.value === 'otro' ? 'block' : 'none'
-                  }} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                  <select onChange={(e) => setEspecialidadOtro(e.target.value === 'otro')} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                     <option value="">Seleccionar...</option>
                     <option value="refraccion">Refraccion</option>
                     <option value="catarata">Catarata</option>
@@ -162,17 +185,19 @@ export default function Agenda() {
                     <option value="glaucoma">Glaucoma</option>
                     <option value="otro">Otro</option>
                   </select>
-                  <input id="otro-especialidad" type="text" placeholder="Escribe la especialidad..." style={{display:'none'}} className="w-full mt-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  {especialidadOtro && (
+                    <input type="text" placeholder="Escribe la especialidad..." className="w-full mt-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Fecha</label>
-                  <input type="date" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="date" onChange={(e) => setNuevaCita({...nuevaCita, fecha: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Hora</label>
-                  <input type="time" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="time" onChange={(e) => setNuevaCita({...nuevaCita, hora: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
             </div>
@@ -180,7 +205,7 @@ export default function Agenda() {
               <button onClick={() => setMostrar(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">
                 Cancelar
               </button>
-              <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">
+              <button onClick={() => { setMostrar(false) }} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">
                 Guardar cita
               </button>
             </div>
