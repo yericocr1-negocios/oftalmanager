@@ -15,6 +15,13 @@ const menu = [
 
 const campoVacio = { esferico: '', cilindro: '', eje: '', av_cc: '', dip: '', altura: '' }
 
+declare global {
+  interface Window {
+    webkitSpeechRecognition: any
+    SpeechRecognition: any
+  }
+}
+
 export default function Consulta() {
   const [grabando, setGrabando] = useState(false)
   const [doctor, setDoctor] = useState('')
@@ -30,12 +37,12 @@ export default function Consulta() {
   const [interOI, setInterOI] = useState({...campoVacio})
 
   const dictar = () => {
-    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
-    if (!SpeechRecognition) {
-      alert('Tu navegador no soporta dictado de voz. Usa Chrome.')
+    const SR = window.webkitSpeechRecognition || window.SpeechRecognition
+    if (!SR) {
+      alert('Tu navegador no soporta dictado. Usa Chrome.')
       return
     }
-    const recognition = new SpeechRecognition()
+    const recognition = new SR()
     recognition.lang = 'es-PE'
     recognition.continuous = false
     recognition.onresult = (event: any) => {
@@ -48,14 +55,8 @@ export default function Consulta() {
   }
 
   const guardar = async () => {
-    if (!doctor) {
-      alert('Ingresa el nombre del doctor')
-      return
-    }
-    if (!fecha) {
-      alert('Ingresa la fecha de prescripcion')
-      return
-    }
+    if (!doctor) { alert('Ingresa el nombre del doctor'); return }
+    if (!fecha) { alert('Ingresa la fecha'); return }
     const consulta = {
       fecha_consulta: fecha,
       especialidad: 'refraccion',
@@ -71,11 +72,8 @@ export default function Consulta() {
       av_oi_cc: lejosOI.av_cc || null,
     }
     const { error } = await supabase.from('historias_clinicas').insert([consulta])
-    if (error) {
-      alert('Error al guardar: ' + error.message)
-    } else {
-      alert('Consulta guardada correctamente')
-    }
+    if (error) { alert('Error: ' + error.message) }
+    else { alert('Consulta guardada correctamente') }
   }
 
   const InputCampo = ({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) => (
@@ -91,14 +89,14 @@ export default function Consulta() {
   const FilaOjo = ({ ojo, data, setData, conAdicion }: { ojo: string, data: any, setData: any, conAdicion: boolean }) => (
     <tr className="border-b border-gray-700">
       <td className="px-3 py-2 text-xs text-gray-400 font-medium whitespace-nowrap">{ojo}</td>
-      <td className="px-1 py-2 w-20"><InputCampo label="+/-" value={data.esferico} onChange={(v) => setData({...data, esferico: v})} /></td>
-      <td className="px-1 py-2 w-20"><InputCampo label="+/-" value={data.cilindro} onChange={(v) => setData({...data, cilindro: v})} /></td>
-      <td className="px-1 py-2 w-16"><InputCampo label="°" value={data.eje} onChange={(v) => setData({...data, eje: v})} /></td>
-      <td className="px-1 py-2 w-20"><InputCampo label="20/" value={data.av_cc} onChange={(v) => setData({...data, av_cc: v})} /></td>
-      <td className="px-1 py-2 w-16"><InputCampo label="mm" value={data.dip} onChange={(v) => setData({...data, dip: v})} /></td>
-      <td className="px-1 py-2 w-16"><InputCampo label="mm" value={data.altura} onChange={(v) => setData({...data, altura: v})} /></td>
+      <td className="px-1 py-2"><InputCampo label="+/-" value={data.esferico} onChange={(v) => setData({...data, esferico: v})} /></td>
+      <td className="px-1 py-2"><InputCampo label="+/-" value={data.cilindro} onChange={(v) => setData({...data, cilindro: v})} /></td>
+      <td className="px-1 py-2"><InputCampo label="°" value={data.eje} onChange={(v) => setData({...data, eje: v})} /></td>
+      <td className="px-1 py-2"><InputCampo label="20/" value={data.av_cc} onChange={(v) => setData({...data, av_cc: v})} /></td>
+      <td className="px-1 py-2"><InputCampo label="mm" value={data.dip} onChange={(v) => setData({...data, dip: v})} /></td>
+      <td className="px-1 py-2"><InputCampo label="mm" value={data.altura} onChange={(v) => setData({...data, altura: v})} /></td>
       {conAdicion && (
-        <td className="px-1 py-2 w-20"><InputCampo label="+/-" value={adicionMedia} onChange={setAdicionMedia} /></td>
+        <td className="px-1 py-2"><InputCampo label="+/-" value={adicionMedia} onChange={setAdicionMedia} /></td>
       )}
     </tr>
   )
@@ -154,10 +152,7 @@ export default function Consulta() {
             <p className="text-sm text-gray-400">Ficha de prescripcion optica</p>
           </div>
           <div className="flex gap-3">
-            <button
-              onClick={dictar}
-              className={'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ' + (grabando ? 'bg-red-600 animate-pulse' : 'bg-gray-700 hover:bg-gray-600')}
-            >
+            <button onClick={dictar} className={'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ' + (grabando ? 'bg-red-600 animate-pulse' : 'bg-gray-700 hover:bg-gray-600')}>
               {grabando ? '🔴 Grabando...' : '🎤 Dictar comentarios'}
             </button>
             <button onClick={guardar} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
