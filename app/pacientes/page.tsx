@@ -6,12 +6,18 @@ const menu = [
   { icon: '🏠', label: 'Dashboard', href: '/' },
   { icon: '👤', label: 'Clientes (pacientes)', href: '/pacientes' },
   { icon: '📅', label: 'Agenda', href: '/agenda' },
-  { icon: '💰', label: 'Ventas', href: '/ventas' },
+  { icon: '💰', label: 'Ventas diarias', href: '/ventas' },
   { icon: '📦', label: 'Inventario', href: '/inventario' },
   { icon: '💳', label: 'Finanzas', href: '/finanzas' },
   { icon: '📊', label: 'Reportes', href: '/reportes' },
   { icon: '⚙️', label: 'Config', href: '/configuracion' },
 ]
+
+const statusColors = {
+  verde: 'bg-green-500',
+  naranja: 'bg-orange-500',
+  rojo: 'bg-red-500',
+}
 
 export default function Pacientes() {
   const [pacientes, setPacientes] = useState([])
@@ -19,7 +25,7 @@ export default function Pacientes() {
   const [mostrar, setMostrar] = useState(false)
   const [cargando, setCargando] = useState(true)
   const [nuevo, setNuevo] = useState({
-    nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', genero: ''
+    nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', genero: '', encargado: '', status: 'verde'
   })
 
   useEffect(() => {
@@ -28,15 +34,11 @@ export default function Pacientes() {
 
   const cargarPacientes = async () => {
     setCargando(true)
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('pacientes')
       .select('*')
       .order('created_at', { ascending: false })
-    if (error) {
-      console.error('Error:', error)
-    } else {
-      setPacientes(data || [])
-    }
+    setPacientes(data || [])
     setCargando(false)
   }
 
@@ -45,17 +47,20 @@ export default function Pacientes() {
       alert('Nombres y apellidos son obligatorios')
       return
     }
-    const { error } = await supabase
-      .from('pacientes')
-      .insert([nuevo])
+    const { error } = await supabase.from('pacientes').insert([nuevo])
     if (error) {
       alert('Error al guardar: ' + error.message)
     } else {
-      alert('Paciente guardado correctamente')
+      alert('Cliente guardado correctamente')
       setMostrar(false)
-      setNuevo({ nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', genero: '' })
+      setNuevo({ nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', genero: '', encargado: '', status: 'verde' })
       cargarPacientes()
     }
+  }
+
+  const cambiarStatus = async (id, status) => {
+    await supabase.from('pacientes').update({ status }).eq('id', id)
+    setPacientes(pacientes.map(p => p.id === id ? { ...p, status } : p))
   }
 
   const filtrados = pacientes.filter(p =>
@@ -84,10 +89,10 @@ export default function Pacientes() {
         <div className="border-b border-gray-800 px-8 py-4 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-semibold">Clientes (pacientes)</h2>
-            <p className="text-sm text-gray-400">{filtrados.length} pacientes encontrados</p>
+            <p className="text-sm text-gray-400">{filtrados.length} clientes encontrados</p>
           </div>
           <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
-            + Nuevo paciente
+            + Nuevo cliente
           </button>
         </div>
 
@@ -101,24 +106,26 @@ export default function Pacientes() {
           />
 
           {cargando ? (
-            <div className="text-center text-gray-400 py-12">Cargando pacientes...</div>
+            <div className="text-center text-gray-400 py-12">Cargando clientes...</div>
           ) : (
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-800">
-                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Paciente</th>
-                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">DNI</th>
+                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Cliente</th>
+                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">RUC/DNI</th>
                     <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Telefono</th>
                     <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Ciudad</th>
+                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Encargado</th>
+                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Status</th>
                     <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtrados.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-gray-400 text-sm">
-                        No hay pacientes registrados. Agrega el primero.
+                      <td colSpan={7} className="px-6 py-12 text-center text-gray-400 text-sm">
+                        No hay clientes registrados. Agrega el primero.
                       </td>
                     </tr>
                   ) : (
@@ -135,6 +142,18 @@ export default function Pacientes() {
                         <td className="px-6 py-4 text-sm text-gray-300">{p.dni || '-'}</td>
                         <td className="px-6 py-4 text-sm text-gray-300">{p.telefono || '-'}</td>
                         <td className="px-6 py-4 text-sm text-gray-300">{p.ciudad || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-300">{p.encargado || '-'}</td>
+                        <td className="px-6 py-4">
+                          <select
+                            value={p.status || 'verde'}
+                            onChange={(e) => cambiarStatus(p.id, e.target.value)}
+                            className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + (statusColors[p.status || 'verde'])}
+                          >
+                            <option value="verde">Verde</option>
+                            <option value="naranja">Naranja</option>
+                            <option value="rojo">Rojo</option>
+                          </select>
+                        </td>
                         <td className="px-6 py-4">
                           <a href={'/pacientes/' + p.id} className="text-blue-400 hover:text-blue-300 text-sm mr-3">Ver</a>
                           <button className="text-gray-400 hover:text-gray-300 text-sm">Editar</button>
@@ -153,7 +172,7 @@ export default function Pacientes() {
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold">Nuevo paciente</h3>
+              <h3 className="text-lg font-semibold">Nuevo cliente</h3>
               <button onClick={() => setMostrar(false)} className="text-gray-400 hover:text-white text-xl">X</button>
             </div>
             <div className="space-y-4">
@@ -169,7 +188,7 @@ export default function Pacientes() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">DNI</label>
+                  <label className="text-xs text-gray-400 mb-1 block">DNI / RUC</label>
                   <input type="text" value={nuevo.dni} onChange={(e) => setNuevo({...nuevo, dni: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
@@ -188,12 +207,22 @@ export default function Pacientes() {
                 </div>
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Genero</label>
-                <select value={nuevo.genero} onChange={(e) => setNuevo({...nuevo, genero: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
-                  <option value="">Seleccionar</option>
-                  <option value="M">Masculino</option>
-                  <option value="F">Femenino</option>
-                </select>
+                <label className="text-xs text-gray-400 mb-1 block">Direccion</label>
+                <input type="text" value={nuevo.direccion} onChange={(e) => setNuevo({...nuevo, direccion: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Encargado</label>
+                  <input type="text" value={nuevo.encargado} onChange={(e) => setNuevo({...nuevo, encargado: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Status inicial</label>
+                  <select value={nuevo.status} onChange={(e) => setNuevo({...nuevo, status: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="verde">Verde</option>
+                    <option value="naranja">Naranja</option>
+                    <option value="rojo">Rojo</option>
+                  </select>
+                </div>
               </div>
             </div>
             <div className="flex gap-3 mt-6">
@@ -201,7 +230,7 @@ export default function Pacientes() {
                 Cancelar
               </button>
               <button onClick={guardarPaciente} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">
-                Guardar paciente
+                Guardar cliente
               </button>
             </div>
           </div>
