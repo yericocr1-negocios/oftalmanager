@@ -151,12 +151,18 @@ export default function Agenda() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Especialidad</label>
-                  <select className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
-                    <option>Refraccion</option>
-                    <option>Catarata</option>
-                    <option>Retina</option>
-                    <option>Glaucoma</option>
+                  <select id="especialidad" onChange={(e) => {
+                    const otro = document.getElementById('otro-especialidad')
+                    if (otro) otro.style.display = e.target.value === 'otro' ? 'block' : 'none'
+                  }} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="">Seleccionar...</option>
+                    <option value="refraccion">Refraccion</option>
+                    <option value="catarata">Catarata</option>
+                    <option value="retina">Retina</option>
+                    <option value="glaucoma">Glaucoma</option>
+                    <option value="otro">Otro</option>
                   </select>
+                  <input id="otro-especialidad" type="text" placeholder="Escribe la especialidad..." style={{display:'none'}} className="w-full mt-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
