@@ -1,0 +1,210 @@
+'use client'
+import { useState } from 'react'
+
+const menu = [
+  { icon: '🏠', label: 'Dashboard', href: '/' },
+  { icon: '👤', label: 'Pacientes', href: '/pacientes' },
+  { icon: '📅', label: 'Agenda', href: '/agenda' },
+  { icon: '💰', label: 'Ventas', href: '/ventas' },
+  { icon: '📦', label: 'Inventario', href: '/inventario' },
+  { icon: '💳', label: 'Finanzas', href: '/finanzas' },
+  { icon: '📊', label: 'Reportes', href: '/reportes' },
+  { icon: '⚙️', label: 'Config', href: '/configuracion' },
+]
+
+const usuarios = [
+  { id: 1, nombre: 'Dr. Garcia', email: 'garcia@clinica.com', rol: 'doctor', sede: 'Lima', activo: true },
+  { id: 2, nombre: 'Dra. Torres', email: 'torres@clinica.com', rol: 'doctor', sede: 'Lima', activo: true },
+  { id: 3, nombre: 'Ana Recepcion', email: 'ana@clinica.com', rol: 'recepcion', sede: 'Lima', activo: true },
+  { id: 4, nombre: 'Luis Ventas', email: 'luis@clinica.com', rol: 'vendedor', sede: 'Arequipa', activo: false },
+]
+
+const sedes = [
+  { id: 1, nombre: 'Sede Lima', direccion: 'Av. Javier Prado 123', ciudad: 'Lima', telefono: '01-234-5678', activo: true },
+  { id: 2, nombre: 'Sede Arequipa', direccion: 'Calle Mercaderes 456', ciudad: 'Arequipa', telefono: '054-234-5678', activo: true },
+]
+
+export default function Configuracion() {
+  const [tab, setTab] = useState('empresa')
+
+  return (
+    <div className="flex h-screen bg-gray-950 text-white">
+      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
+        <div className="p-6 border-b border-gray-800">
+          <h1 className="text-xl font-bold text-blue-400">OFTALMANAGER</h1>
+        </div>
+        <nav className="flex-1 p-4 space-y-1">
+          {menu.map((item) => (
+            <a key={item.label} href={item.href} className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 text-sm">
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
+            </a>
+          ))}
+        </nav>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        <div className="border-b border-gray-800 px-8 py-4">
+          <h2 className="text-lg font-semibold">Configuracion</h2>
+          <p className="text-sm text-gray-400">Administra tu empresa, sedes y usuarios</p>
+        </div>
+
+        <div className="p-8">
+          <div className="flex gap-3 mb-6">
+            {['empresa', 'sedes', 'usuarios', 'permisos'].map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={'px-4 py-2 rounded-lg text-sm transition-all ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}
+              >
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'empresa' && (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <h3 className="font-semibold mb-6">Datos de la empresa</h3>
+              <div className="space-y-4 max-w-lg">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Nombre de la empresa</label>
+                  <input type="text" defaultValue="Clinica Vision Peru" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">RUC</label>
+                  <input type="text" defaultValue="20123456789" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Email</label>
+                  <input type="email" defaultValue="contacto@clinica.com" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Telefono</label>
+                  <input type="text" defaultValue="01-234-5678" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Direccion principal</label>
+                  <input type="text" defaultValue="Av. Javier Prado 123, Lima" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
+                  Guardar cambios
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tab === 'sedes' && (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
+                <h3 className="font-medium">Sedes registradas</h3>
+                <button className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm">+ Nueva sede</button>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-800">
+                    <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Sede</th>
+                    <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Ciudad</th>
+                    <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Telefono</th>
+                    <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Estado</th>
+                    <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sedes.map((s) => (
+                    <tr key={s.id} className="border-b border-gray-800 hover:bg-gray-800">
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-medium">{s.nombre}</p>
+                        <p className="text-xs text-gray-400">{s.direccion}</p>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-300">{s.ciudad}</td>
+                      <td className="px-6 py-4 text-sm text-gray-300">{s.telefono}</td>
+                      <td className="px-6 py-4">
+                        <span className="bg-green-900 text-green-400 text-xs px-2 py-1 rounded-full">Activo</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button className="text-blue-400 hover:text-blue-300 text-sm">Editar</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {tab === 'usuarios' && (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
+                <h3 className="font-medium">Usuarios del sistema</h3>
+                <button className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm">+ Nuevo usuario</button>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-800">
+                    <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Usuario</th>
+                    <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Rol</th>
+                    <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Sede</th>
+                    <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Estado</th>
+                    <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usuarios.map((u) => (
+                    <tr key={u.id} className="border-b border-gray-800 hover:bg-gray-800">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold">
+                            {u.nombre[0]}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{u.nombre}</p>
+                            <p className="text-xs text-gray-400">{u.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="bg-purple-900 text-purple-400 text-xs px-2 py-1 rounded-full capitalize">{u.rol}</span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-300">{u.sede}</td>
+                      <td className="px-6 py-4">
+                        <span className={'text-xs px-2 py-1 rounded-full ' + (u.activo ? 'bg-green-900 text-green-400' : 'bg-gray-800 text-gray-400')}>
+                          {u.activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button className="text-blue-400 hover:text-blue-300 text-sm mr-3">Editar</button>
+                        <button className="text-red-400 hover:text-red-300 text-sm">Desactivar</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {tab === 'permisos' && (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <h3 className="font-semibold mb-6">Permisos por rol</h3>
+              <div className="space-y-4">
+                {[
+                  { rol: 'Admin', permisos: ['Dashboard', 'Pacientes', 'Agenda', 'Ventas', 'Inventario', 'Finanzas', 'Reportes', 'Configuracion'] },
+                  { rol: 'Doctor', permisos: ['Dashboard', 'Pacientes', 'Agenda'] },
+                  { rol: 'Vendedor', permisos: ['Dashboard', 'Pacientes', 'Ventas', 'Inventario'] },
+                  { rol: 'Recepcion', permisos: ['Dashboard', 'Pacientes', 'Agenda'] },
+                ].map((r) => (
+                  <div key={r.rol} className="border border-gray-800 rounded-xl p-4">
+                    <p className="font-medium mb-3">{r.rol}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {r.permisos.map((p) => (
+                        <span key={p} className="bg-blue-900 text-blue-400 text-xs px-2 py-1 rounded-full">{p}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
