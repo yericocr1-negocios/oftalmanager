@@ -13,26 +13,37 @@ const menu = [
   { icon: '⚙️', label: 'Config', href: '/configuracion' },
 ]
 
+interface Paciente {
+  id: string
+  nombres: string
+  apellidos: string
+  dni: string
+  telefono: string
+  email: string
+  ciudad: string
+  direccion: string
+  genero: string
+}
+
 export default function PerfilPaciente({ params }: { params: { id: string } }) {
-  const [paciente, setPaciente] = useState(null)
+  const [paciente, setPaciente] = useState<Paciente | null>(null)
   const [tab, setTab] = useState('datos')
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
+    const cargarPaciente = async () => {
+      setCargando(true)
+      const id = window.location.pathname.split('/').pop()
+      const { data } = await supabase
+        .from('pacientes')
+        .select('*')
+        .eq('id', id)
+        .single()
+      setPaciente(data)
+      setCargando(false)
+    }
     cargarPaciente()
   }, [])
-
-  const cargarPaciente = async () => {
-    setCargando(true)
-    const id = window.location.pathname.split('/').pop()
-    const { data } = await supabase
-      .from('pacientes')
-      .select('*')
-      .eq('id', id)
-      .single()
-    setPaciente(data)
-    setCargando(false)
-  }
 
   if (cargando) return (
     <div className="flex h-screen bg-gray-950 text-white items-center justify-center">
@@ -127,10 +138,6 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                   <label className="text-xs text-gray-400 mb-1 block">Ciudad</label>
                   <input type="text" defaultValue={paciente.ciudad || ''} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-gray-400 mb-1 block">Direccion</label>
-                  <input type="text" defaultValue={paciente.direccion || ''} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                </div>
               </div>
               <button className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
                 Guardar cambios
@@ -141,7 +148,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
           {tab === 'historia' && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
               <div className="flex justify-between items-center mb-6">
-                <h3 className="font-semibold">Historia Clinica Optica</h3>
+                <h3 className="font-semibold">Historia Clinica</h3>
                 <a href="/consulta" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
                   Nueva consulta
                 </a>
