@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 
 const menu = [
   { icon: '🏠', label: 'Dashboard', href: '/' },
-  { icon: '👤', label: 'Pacientes', href: '/pacientes' },
+  { icon: '👤', label: 'Clientes (pacientes)', href: '/pacientes' },
   { icon: '📅', label: 'Agenda', href: '/agenda' },
   { icon: '💰', label: 'Ventas', href: '/ventas' },
   { icon: '📦', label: 'Inventario', href: '/inventario' },
@@ -83,7 +83,7 @@ export default function Pacientes() {
       <div className="flex-1 overflow-auto">
         <div className="border-b border-gray-800 px-8 py-4 flex justify-between items-center">
           <div>
-            <h2 className="text-lg font-semibold">Pacientes</h2>
+            <h2 className="text-lg font-semibold">Clientes (pacientes)</h2>
             <p className="text-sm text-gray-400">{filtrados.length} pacientes encontrados</p>
           </div>
           <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
