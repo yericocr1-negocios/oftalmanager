@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { supabase } from '../../lib/supabase'
 
 const menu = [
   { icon: '🏠', label: 'Dashboard', href: '/' },
@@ -11,6 +12,9 @@ const menu = [
   { icon: '📊', label: 'Reportes', href: '/reportes' },
   { icon: '⚙️', label: 'Config', href: '/configuracion' },
 ]
+
+const EMPRESA_ID = 'b2711600-fbf7-4f11-b699-8024e36c7cf5'
+const SEDE_ID = 'd976f6cb-01f1-4962-a728-1a1012ffc305'
 
 const productosDisponibles = [
   { id: 1, nombre: 'Consulta General', precio: 80, categoria: 'Servicio' },
@@ -41,7 +45,6 @@ const productosDisponibles = [
 const categorias = ['Servicio', 'Examen', 'Montura', 'Luna', 'Contacto', 'Cirugia', 'Medicamento']
 
 export default function VentasDiarias() {
-  const [tab, setTab] = useState('pos')
   const [carrito, setCarrito] = useState([])
   const [paciente, setPaciente] = useState('')
   const [metodoPago, setMetodoPago] = useState('efectivo')
@@ -50,13 +53,13 @@ export default function VentasDiarias() {
   const [mostrarEspecializada, setMostrarEspecializada] = useState(false)
   const [cuotas, setCuotas] = useState(false)
   const [numeroCuotas, setNumeroCuotas] = useState(2)
+  const [guardando, setGuardando] = useState(false)
 
   const [ventaEsp, setVentaEsp] = useState({
     ciudad: '', vendedor: '', optica: '', codigo: '', monto: 0,
     cantidad: 1, facturadoPor: '', fecha: '', guia: '', factura: '',
     comentarios: '', pago: 'directo', cuotas: 1,
-    tipoVenta: '', doctor: '', sede: '', comprobante: 'boleta',
-    descuento: 0, moneda: 'PEN', formaPago: 'efectivo',
+    doctor: '', comprobante: 'boleta', descuento: 0,
     laboratorio: '', fechaEntrega: '', observaciones: ''
   })
 
@@ -80,12 +83,45 @@ export default function VentasDiarias() {
   const subtotal = carrito.reduce((sum, item) => sum + item.precio * item.cantidad, 0)
   const total = subtotal
 
-  const cobrar = () => {
+  const cobrar = async () => {
     if (carrito.length === 0) return alert('Agrega productos al carrito')
     if (!paciente) return alert('Ingresa el nombre del paciente')
-    const telefono = prompt('Telefono del paciente para WhatsApp (opcional):')
+    setGuardando(true)
+
+    const { data: ventaData, error: ventaError } = await supabase
+      .from('ventas')
+      .insert([{
+        empresa_id: EMPRESA_ID,
+        sede_id: SEDE_ID,
+        subtotal: subtotal,
+        total: total,
+        metodo_pago: metodoPago,
+        estado: 'pagado',
+        notas: 'Paciente: ' + paciente,
+        tipo_comprobante: 'boleta',
+      }])
+      .select()
+      .single()
+
+    if (ventaError) {
+      alert('Error al guardar: ' + ventaError.message)
+      setGuardando(false)
+      return
+    }
+
+    for (const item of carrito) {
+      await supabase.from('ventas_detalle').insert([{
+        venta_id: ventaData.id,
+        cantidad: item.cantidad,
+        precio_unitario: item.precio,
+        subtotal: item.precio * item.cantidad,
+      }])
+    }
+
+    setGuardando(false)
+    const telefono = prompt('Telefono para WhatsApp (opcional, sin +51):')
     if (telefono) {
-      const mensaje = encodeURIComponent('Hola ' + paciente + ', gracias por tu compra en OFTALMANAGER. Total: S/ ' + total + '. Metodo de pago: ' + metodoPago)
+      const mensaje = encodeURIComponent('Hola ' + paciente + ', gracias por tu compra en OFTALMANAGER. Total: S/ ' + total)
       window.open('https://wa.me/51' + telefono + '?text=' + mensaje, '_blank')
     }
     alert('Venta registrada correctamente')
@@ -96,7 +132,7 @@ export default function VentasDiarias() {
   const enviarWhatsApp = () => {
     const telefono = prompt('Ingresa el telefono del cliente (sin +51):')
     if (telefono) {
-      const mensaje = encodeURIComponent('Hola, le contactamos desde OFTALMANAGER. ¿En que podemos ayudarle?')
+      const mensaje = encodeURIComponent('Hola, le contactamos desde OFTALMANAGER. En que podemos ayudarle?')
       window.open('https://wa.me/51' + telefono + '?text=' + mensaje, '_blank')
     }
   }
@@ -135,7 +171,7 @@ export default function VentasDiarias() {
 
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 overflow-auto p-6">
-            <div className="flex gap-2 mb-4 flex-wrap">
+            <div className="flex gap-2 mb-4">
               <input
                 type="text"
                 placeholder="Buscar producto..."
@@ -254,14 +290,15 @@ export default function VentasDiarias() {
                     className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
                   />
                 )}
-                {cuotas && <span className="text-xs text-gray-400">cuotas de S/ {Math.round(total / numeroCuotas)}</span>}
+                {cuotas && <span className="text-xs text-gray-400">x S/ {Math.round(total / numeroCuotas)}</span>}
               </div>
 
               <button
                 onClick={cobrar}
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold transition-all"
+                disabled={guardando}
+                className={'w-full text-white py-3 rounded-lg font-bold transition-all ' + (guardando ? 'bg-gray-600' : 'bg-green-600 hover:bg-green-700')}
               >
-                Cobrar S/ {total}
+                {guardando ? 'Guardando...' : 'Cobrar S/ ' + total}
               </button>
             </div>
           </div>
@@ -380,7 +417,25 @@ export default function VentasDiarias() {
               <button onClick={() => setMostrarEspecializada(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">
                 Cancelar
               </button>
-              <button onClick={() => { alert('Venta especializada registrada correctamente'); setMostrarEspecializada(false) }} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg text-sm font-medium">
+              <button
+                onClick={async () => {
+                  const { error } = await supabase.from('ventas').insert([{
+                    empresa_id: EMPRESA_ID,
+                    sede_id: SEDE_ID,
+                    subtotal: ventaEsp.monto,
+                    total: ventaEsp.monto - ventaEsp.descuento,
+                    metodo_pago: 'efectivo',
+                    estado: 'pagado',
+                    notas: ventaEsp.comentarios,
+                    tipo_comprobante: ventaEsp.comprobante,
+                    numero_comprobante: ventaEsp.factura,
+                  }])
+                  if (error) { alert('Error: ' + error.message); return }
+                  alert('Venta especializada registrada correctamente')
+                  setMostrarEspecializada(false)
+                }}
+                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg text-sm font-medium"
+              >
                 Registrar venta
               </button>
             </div>
