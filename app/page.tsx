@@ -1,8 +1,7 @@
 export default function Home() {
   return (
     <div className="flex h-screen bg-gray-950 text-white">
-      
-      {/* SIDEBAR */}
+
       <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
         <div className="p-6 border-b border-gray-800">
           <h1 className="text-xl font-bold text-blue-400">👁 OFTALMANAGER</h1>
@@ -10,30 +9,29 @@ export default function Home() {
         </div>
         <nav className="flex-1 p-4 space-y-1">
           {[
-            { icon: '🏠', label: 'Dashboard' },
-            { icon: '👤', label: 'Pacientes' },
-            { icon: '📅', label: 'Agenda' },
-            { icon: '💰', label: 'Ventas' },
-            { icon: '📦', label: 'Inventario' },
-            { icon: '💳', label: 'Finanzas' },
-            { icon: '📊', label: 'Reportes' },
-            { icon: '⚙️', label: 'Configuración' },
+            { icon: '🏠', label: 'Dashboard', href: '/' },
+            { icon: '👤', label: 'Pacientes', href: '/pacientes' },
+            { icon: '📅', label: 'Agenda', href: '/agenda' },
+            { icon: '💰', label: 'Ventas', href: '/ventas' },
+            { icon: '📦', label: 'Inventario', href: '/inventario' },
+            { icon: '💳', label: 'Finanzas', href: '/finanzas' },
+            { icon: '📊', label: 'Reportes', href: '/reportes' },
+            { icon: '⚙️', label: 'Configuración', href: '/configuracion' },
           ].map((item) => (
-            <button
+            
               key={item.label}
+              href={item.href}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-all text-sm"
             >
               <span>{item.icon}</span>
               <span>{item.label}</span>
-            </button>
+            </a>
           ))}
         </nav>
       </div>
 
-      {/* CONTENIDO PRINCIPAL */}
       <div className="flex-1 overflow-auto">
-        
-        {/* HEADER */}
+
         <div className="border-b border-gray-800 px-8 py-4 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-semibold">Dashboard</h2>
@@ -47,7 +45,6 @@ export default function Home() {
 
         <div className="p-8">
 
-          {/* CARDS KPIs */}
           <div className="grid grid-cols-4 gap-4 mb-8">
             {[
               { label: 'Ventas hoy', value: 'S/ 0', icon: '💰', color: 'text-green-400' },
@@ -60,31 +57,62 @@ export default function Home() {
                   <p className="text-sm text-gray-400">{card.label}</p>
                   <span className="text-xl">{card.icon}</span>
                 </div>
-                <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+                <p className={'text-2xl font-bold ' + card.color}>{card.value}</p>
               </div>
             ))}
           </div>
 
-          {/* TABLAS */}
-          <div className="grid grid-cols-2 gap-6">
-            
-            {/* Últimas ventas */}
+          <div className="grid grid-cols-2 gap-6 mb-6">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h3 className="font-semibold mb-4">Últimas ventas</h3>
-              <div className="text-center text-gray-500 py-8 text-sm">
-                No hay ventas registradas aún
+              <h3 className="font-semibold mb-4">Accesos rapidos</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: 'Nuevo paciente', href: '/pacientes', color: 'bg-blue-600 hover:bg-blue-700' },
+                  { label: 'Nueva cita', href: '/agenda', color: 'bg-purple-600 hover:bg-purple-700' },
+                  { label: 'Nueva venta', href: '/ventas', color: 'bg-green-600 hover:bg-green-700' },
+                  { label: 'Nueva consulta', href: '/consulta', color: 'bg-orange-600 hover:bg-orange-700' },
+                ].map((btn) => (
+                  <a key={btn.label} href={btn.href} className={'text-white text-sm px-4 py-3 rounded-lg text-center transition-all ' + btn.color}>
+                    {btn.label}
+                  </a>
+                ))}
               </div>
             </div>
 
-            {/* Próximas citas */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h3 className="font-semibold mb-4">Próximas citas</h3>
-              <div className="text-center text-gray-500 py-8 text-sm">
-                No hay citas programadas aún
+              <h3 className="font-semibold mb-4">Resumen del dia</h3>
+              <div className="space-y-3">
+                {[
+                  { label: 'Citas programadas', value: '0', color: 'text-blue-400' },
+                  { label: 'Consultas realizadas', value: '0', color: 'text-green-400' },
+                  { label: 'Ventas completadas', value: '0', color: 'text-yellow-400' },
+                  { label: 'Ingresos del dia', value: 'S/ 0', color: 'text-purple-400' },
+                ].map((item) => (
+                  <div key={item.label} className="flex justify-between items-center">
+                    <span className="text-sm text-gray-400">{item.label}</span>
+                    <span className={'font-bold ' + item.color}>{item.value}</span>
+                  </div>
+                ))}
               </div>
             </div>
-
           </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <h3 className="font-semibold mb-4">Ultimas ventas</h3>
+              <div className="text-center text-gray-500 py-8 text-sm">
+                No hay ventas registradas aun
+              </div>
+            </div>
+
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <h3 className="font-semibold mb-4">Proximas citas</h3>
+              <div className="text-center text-gray-500 py-8 text-sm">
+                No hay citas programadas aun
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
