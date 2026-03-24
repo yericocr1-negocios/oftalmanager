@@ -4,25 +4,19 @@ import Sidebar from '../../components/Sidebar'
 import { supabase } from '../../lib/supabase'
 
 const SEDE_ID = 'd976f6cb-01f1-4962-a728-1a1012ffc305'
-const EMPRESA_ID = 'b2711600-fbf7-4f11-b699-8024e36c7cf5'
 
 export default function Finanzas() {
   const [tab, setTab] = useState('caja')
   const [movimientos, setMovimientos] = useState([])
   const [cuotas, setCuotas] = useState([])
-  const [cobrar, setCobrar] = useState([])
   const [pagar, setPagar] = useState([])
   const [cargando, setCargando] = useState(true)
   const [mostrarMov, setMostrarMov] = useState(false)
-  const [mostrarCobrar, setMostrarCobrar] = useState(false)
   const [mostrarPagar, setMostrarPagar] = useState(false)
-  const [nuevoMov, setNuevoMov] = useState({ cliente: '', concepto: '', sucursal: '', numero: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
-  const [nuevoCobrar, setNuevoCobrar] = useState({ cliente: '', empresa: '', tipo: 'paciente', dni: '', telefono: '', tipoIngreso: 'consulta', descripcion: '', total: 0, cuotas: 1, fechaVencimiento: '', comprobante: 'boleta' })
+  const [nuevoMov, setNuevoMov] = useState({ cliente: '', concepto: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
   const [nuevoPagar, setNuevoPagar] = useState({ proveedor: '', empresa: '', ruc: '', tipoProveedor: 'laboratorio', producto: '', cantidad: 0, costoUnitario: 0, fechaVencimiento: '', numeroFactura: '' })
 
-  useEffect(() => {
-    cargarDatos()
-  }, [])
+  useEffect(() => { cargarDatos() }, [])
 
   const cargarDatos = async () => {
     setCargando(true)
@@ -30,7 +24,7 @@ export default function Finanzas() {
       .from('caja')
       .select('*')
       .order('fecha', { ascending: false })
-      .limit(50)
+      .limit(100)
     setMovimientos(cajaDatos || [])
 
     const { data: cuotasDatos } = await supabase
@@ -46,15 +40,7 @@ export default function Finanzas() {
   const egresos = movimientos.filter(m => m.tipo === 'egreso').reduce((sum, m) => sum + m.monto, 0)
   const totalCuotasPendientes = cuotas.filter(c => c.estado === 'pendiente').reduce((sum, c) => sum + c.monto, 0)
 
-  const estadoColor = {
-    pendiente: 'bg-yellow-900 text-yellow-400',
-    parcial: 'bg-blue-900 text-blue-400',
-    pagado: 'bg-green-900 text-green-400',
-    vencido: 'bg-red-900 text-red-400',
-  }
-
   const guardarMov = async () => {
-    const ahora = new Date()
     const { error } = await supabase.from('caja').insert([{
       sede_id: SEDE_ID,
       tipo: nuevoMov.tipo,
@@ -62,17 +48,23 @@ export default function Finanzas() {
       monto: nuevoMov.monto,
       metodo_pago: nuevoMov.metodo,
       cliente_nombre: nuevoMov.cliente,
-      fecha: ahora.toISOString(),
+      fecha: new Date().toISOString(),
     }])
     if (error) { alert('Error: ' + error.message); return }
     setMostrarMov(false)
-    setNuevoMov({ cliente: '', concepto: '', sucursal: '', numero: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
+    setNuevoMov({ cliente: '', concepto: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
     cargarDatos()
   }
 
   const marcarCuotaPagada = async (id) => {
     await supabase.from('cuotas_pago').update({ estado: 'pagado' }).eq('id', id)
     cargarDatos()
+  }
+
+  const guardarPagar = () => {
+    const total = nuevoPagar.cantidad * nuevoPagar.costoUnitario
+    setPagar([...pagar, { ...nuevoPagar, id: pagar.length + 1, total, pagado: 0, estado: 'pendiente', fechaCompra: new Date().toISOString().split('T')[0] }])
+    setMostrarPagar(false)
   }
 
   return (
@@ -86,7 +78,6 @@ export default function Finanzas() {
           </div>
           <div>
             {tab === 'caja' && <button onClick={() => setMostrarMov(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nuevo movimiento</button>}
-            {tab === 'cobrar' && <button onClick={() => setMostrarCobrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nueva cuenta por cobrar</button>}
             {tab === 'pagar' && <button onClick={() => setMostrarPagar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nueva cuenta por pagar</button>}
           </div>
         </div>
@@ -112,9 +103,9 @@ export default function Finanzas() {
           </div>
 
           <div className="flex gap-3 mb-6">
-            {['caja', 'cuotas', 'cobrar', 'pagar'].map((t) => (
+            {['caja', 'cuotas', 'pagar'].map((t) => (
               <button key={t} onClick={() => setTab(t)} className={'px-4 py-2 rounded-lg text-sm transition-all ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
-                {t === 'caja' ? 'Caja' : t === 'cuotas' ? 'Cuotas por cobrar' : t === 'cobrar' ? 'Cuentas por cobrar' : 'Cuentas por pagar'}
+                {t === 'caja' ? 'Caja' : t === 'cuotas' ? 'Cuotas por cobrar' : 'Cuentas por pagar'}
               </button>
             ))}
           </div>
@@ -130,8 +121,6 @@ export default function Finanzas() {
                       <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Dia / Hora</th>
                       <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Cliente</th>
                       <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Concepto</th>
-                      <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Sucursal</th>
-                      <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">N° Op.</th>
                       <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Metodo</th>
                       <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Tipo</th>
                       <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Monto</th>
@@ -139,14 +128,14 @@ export default function Finanzas() {
                   </thead>
                   <tbody>
                     {movimientos.length === 0 ? (
-                      <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400 text-sm">No hay movimientos registrados aun</td></tr>
+                      <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm">No hay movimientos registrados aun</td></tr>
                     ) : movimientos.map((m) => (
                       <tr key={m.id} className="border-b border-gray-800 hover:bg-gray-800">
-                        <td className="px-4 py-3 text-xs text-gray-400">{new Date(m.fecha).toLocaleDateString('es-PE')} {new Date(m.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td className="px-4 py-3 text-xs text-gray-400">
+                          {new Date(m.fecha).toLocaleDateString('es-PE')} {new Date(m.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
                         <td className="px-4 py-3 text-sm">{m.cliente_nombre || '-'}</td>
                         <td className="px-4 py-3 text-sm">{m.concepto}</td>
-                        <td className="px-4 py-3 text-sm text-gray-300">-</td>
-                        <td className="px-4 py-3 text-xs text-gray-400 font-mono">-</td>
                         <td className="px-4 py-3 text-sm text-gray-300 capitalize">{m.metodo_pago || '-'}</td>
                         <td className="px-4 py-3">
                           <span className={'text-xs px-2 py-1 rounded-full ' + (m.tipo === 'ingreso' ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400')}>{m.tipo}</span>
@@ -177,15 +166,17 @@ export default function Finanzas() {
                 </thead>
                 <tbody>
                   {cuotas.length === 0 ? (
-                    <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm">No hay cuotas registradas</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm">No hay cuotas registradas. Se generan automaticamente al vender en cuotas.</td></tr>
                   ) : cuotas.map((c) => (
                     <tr key={c.id} className="border-b border-gray-800 hover:bg-gray-800">
-                      <td className="px-4 py-3 text-sm">{c.cliente_nombre}</td>
+                      <td className="px-4 py-3 text-sm font-medium">{c.cliente_nombre}</td>
                       <td className="px-4 py-3 text-sm text-gray-300">Cuota {c.numero_cuota}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-blue-400">S/ {c.monto}</td>
+                      <td className="px-4 py-3 text-sm font-bold text-blue-400">S/ {c.monto}</td>
                       <td className="px-4 py-3 text-sm text-gray-300">{c.fecha_vencimiento}</td>
                       <td className="px-4 py-3">
-                        <span className={'text-xs px-2 py-1 rounded-full ' + (c.estado === 'pagado' ? 'bg-green-900 text-green-400' : 'bg-yellow-900 text-yellow-400')}>{c.estado}</span>
+                        <span className={'text-xs px-2 py-1 rounded-full ' + (c.estado === 'pagado' ? 'bg-green-900 text-green-400' : 'bg-yellow-900 text-yellow-400')}>
+                          {c.estado}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         {c.estado !== 'pagado' && (
@@ -199,15 +190,40 @@ export default function Finanzas() {
             </div>
           )}
 
-          {tab === 'cobrar' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <p className="text-center text-gray-400 py-12">Las cuentas por cobrar se generan automaticamente cuando registras una venta en cuotas. Ve a la pestaña Cuotas por cobrar.</p>
-            </div>
-          )}
-
           {tab === 'pagar' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <p className="text-center text-gray-400 py-8 text-sm">Proximamente — registro de cuentas por pagar a proveedores</p>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-800">
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Proveedor</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Tipo</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Producto</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Total</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Pagado</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Pendiente</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Vence</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagar.length === 0 ? (
+                    <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400 text-sm">No hay cuentas por pagar registradas</td></tr>
+                  ) : pagar.map((c) => (
+                    <tr key={c.id} className="border-b border-gray-800 hover:bg-gray-800">
+                      <td className="px-4 py-3 text-sm font-medium">{c.proveedor}</td>
+                      <td className="px-4 py-3 text-sm text-gray-300 capitalize">{c.tipoProveedor}</td>
+                      <td className="px-4 py-3 text-sm text-gray-300">{c.producto}</td>
+                      <td className="px-4 py-3 text-sm">S/ {c.total}</td>
+                      <td className="px-4 py-3 text-sm text-green-400">S/ {c.pagado}</td>
+                      <td className="px-4 py-3 text-sm text-yellow-400">S/ {c.total - c.pagado}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400">{c.fechaVencimiento}</td>
+                      <td className="px-4 py-3">
+                        <span className={'text-xs px-2 py-1 rounded-full bg-yellow-900 text-yellow-400'}>{c.estado}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -256,6 +272,72 @@ export default function Finanzas() {
             <div className="flex gap-3 mt-6">
               <button onClick={() => setMostrarMov(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
               <button onClick={guardarMov} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mostrarPagar && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 overflow-auto py-8">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold">Nueva cuenta por pagar</h3>
+              <button onClick={() => setMostrarPagar(false)} className="text-gray-400 hover:text-white text-xl">X</button>
+            </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Proveedor</label>
+                  <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, proveedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Empresa</label>
+                  <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, empresa: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">RUC</label>
+                  <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, ruc: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Tipo de proveedor</label>
+                  <select onChange={(e) => setNuevoPagar({...nuevoPagar, tipoProveedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="laboratorio">Laboratorio</option>
+                    <option value="monturas">Monturas</option>
+                    <option value="equipos">Equipos medicos</option>
+                    <option value="servicios">Servicios</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="alquiler">Alquiler</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Producto / Servicio</label>
+                <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, producto: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Cantidad</label>
+                  <input type="number" onChange={(e) => setNuevoPagar({...nuevoPagar, cantidad: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Costo unitario S/</label>
+                  <input type="number" onChange={(e) => setNuevoPagar({...nuevoPagar, costoUnitario: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">N° Factura</label>
+                  <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, numeroFactura: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Fecha vencimiento</label>
+                <input type="date" onChange={(e) => setNuevoPagar({...nuevoPagar, fechaVencimiento: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setMostrarPagar(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
+              <button onClick={guardarPagar} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
             </div>
           </div>
         </div>
