@@ -20,16 +20,18 @@ export default function Sidebar() {
         <p className="text-xs text-gray-400 mt-1">Sistema de gestion clinica</p>
       </div>
       <nav className="flex-1 p-4 space-y-1">
-        {menu.map((item) => (
-          
-            key={item.label}
-            href={item.href}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-all text-sm"
-          >
-            <span>{item.icon}</span>
-            <span>{item.label}</span>
-          </a>
-        ))}
+        {menu.map((item) => {
+          return (
+            
+              key={item.label}
+              href={item.href}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-all text-sm"
+            >
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
+            </a>
+          )
+        })}
       </nav>
     </div>
   )

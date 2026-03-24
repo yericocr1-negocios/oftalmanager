@@ -1,17 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-
-const menu = [
-  { icon: '🏠', label: 'Dashboard', href: '/' },
-  { icon: '👤', label: 'Pacientes', href: '/pacientes' },
-  { icon: '📅', label: 'Agenda', href: '/agenda' },
-  { icon: '💰', label: 'Ventas diarias', href: '/ventas' },
-  { icon: '📦', label: 'Inventario', href: '/inventario' },
-  { icon: '💳', label: 'Finanzas', href: '/finanzas' },
-  { icon: '📊', label: 'Reportes', href: '/reportes' },
-  { icon: '⚙️', label: 'Config', href: '/configuracion' },
-]
+import Sidebar from '../../components/Sidebar'
 
 const EMPRESA_ID = 'b2711600-fbf7-4f11-b699-8024e36c7cf5'
 const SEDE_ID = 'd976f6cb-01f1-4962-a728-1a1012ffc305'
@@ -46,7 +36,10 @@ const categorias = ['Servicio', 'Examen', 'Montura', 'Luna', 'Contacto', 'Cirugi
 
 export default function VentasDiarias() {
   const [carrito, setCarrito] = useState([])
-  const [paciente, setPaciente] = useState('')
+  const [clientes, setClientes] = useState([])
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null)
+  const [busquedaCliente, setBusquedaCliente] = useState('')
+  const [mostrarClientes, setMostrarClientes] = useState(false)
   const [metodoPago, setMetodoPago] = useState('efectivo')
   const [busqueda, setBusqueda] = useState('')
   const [categoriaFiltro, setCategoriaFiltro] = useState('todos')
@@ -54,14 +47,25 @@ export default function VentasDiarias() {
   const [cuotas, setCuotas] = useState(false)
   const [numeroCuotas, setNumeroCuotas] = useState(2)
   const [guardando, setGuardando] = useState(false)
-
   const [ventaEsp, setVentaEsp] = useState({
-    ciudad: '', vendedor: '', optica: '', codigo: '', monto: 0,
+    ciudad: '', vendedor: '', optica: '', dni: '', codigo: '', monto: 0,
     cantidad: 1, facturadoPor: '', fecha: '', guia: '', factura: '',
     comentarios: '', pago: 'directo', cuotas: 1,
     doctor: '', comprobante: 'boleta', descuento: 0,
     laboratorio: '', fechaEntrega: '', observaciones: ''
   })
+
+  useEffect(() => { cargarClientes() }, [])
+
+  const cargarClientes = async () => {
+    const { data } = await supabase.from('pacientes').select('id, nombres, apellidos, dni, telefono, ciudad').order('nombres')
+    setClientes(data || [])
+  }
+
+  const clientesFiltrados = clientes.filter(c =>
+    (c.nombres + ' ' + c.apellidos).toLowerCase().includes(busquedaCliente.toLowerCase()) ||
+    (c.dni || '').includes(busquedaCliente)
+  )
 
   const productosFiltrados = productosDisponibles.filter(p => {
     const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
@@ -79,35 +83,31 @@ export default function VentasDiarias() {
   }
 
   const quitarDelCarrito = (id) => setCarrito(carrito.filter(item => item.id !== id))
-
   const subtotal = carrito.reduce((sum, item) => sum + item.precio * item.cantidad, 0)
   const total = subtotal
 
   const cobrar = async () => {
     if (carrito.length === 0) return alert('Agrega productos al carrito')
-    if (!paciente) return alert('Ingresa el nombre del paciente')
+    if (!clienteSeleccionado && !busquedaCliente) return alert('Ingresa o selecciona un cliente')
     setGuardando(true)
 
-    const { data: ventaData, error: ventaError } = await supabase
+    const { data: ventaData, error } = await supabase
       .from('ventas')
       .insert([{
         empresa_id: EMPRESA_ID,
         sede_id: SEDE_ID,
-        subtotal: subtotal,
-        total: total,
+        paciente_id: clienteSeleccionado ? clienteSeleccionado.id : null,
+        subtotal,
+        total,
         metodo_pago: metodoPago,
         estado: 'pagado',
-        notas: 'Paciente: ' + paciente,
+        notas: clienteSeleccionado ? clienteSeleccionado.nombres + ' ' + clienteSeleccionado.apellidos : busquedaCliente,
         tipo_comprobante: 'boleta',
       }])
       .select()
       .single()
 
-    if (ventaError) {
-      alert('Error al guardar: ' + ventaError.message)
-      setGuardando(false)
-      return
-    }
+    if (error) { alert('Error: ' + error.message); setGuardando(false); return }
 
     for (const item of carrito) {
       await supabase.from('ventas_detalle').insert([{
@@ -121,12 +121,14 @@ export default function VentasDiarias() {
     setGuardando(false)
     const telefono = prompt('Telefono para WhatsApp (opcional, sin +51):')
     if (telefono) {
-      const mensaje = encodeURIComponent('Hola ' + paciente + ', gracias por tu compra en OFTALMANAGER. Total: S/ ' + total)
+      const nombre = clienteSeleccionado ? clienteSeleccionado.nombres : busquedaCliente
+      const mensaje = encodeURIComponent('Hola ' + nombre + ', gracias por tu compra. Total: S/ ' + total)
       window.open('https://wa.me/51' + telefono + '?text=' + mensaje, '_blank')
     }
     alert('Venta registrada correctamente')
     setCarrito([])
-    setPaciente('')
+    setClienteSeleccionado(null)
+    setBusquedaCliente('')
   }
 
   const enviarWhatsApp = () => {
@@ -139,20 +141,7 @@ export default function VentasDiarias() {
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
-      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-xl font-bold text-blue-400">OFTALMANAGER</h1>
-        </div>
-        <nav className="flex-1 p-4 space-y-1">
-          {menu.map((item) => (
-            <a key={item.label} href={item.href} className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 text-sm">
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </nav>
-      </div>
-
+      <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="border-b border-gray-800 px-8 py-4 flex justify-between items-center">
           <div>
@@ -172,26 +161,15 @@ export default function VentasDiarias() {
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 overflow-auto p-6">
             <div className="flex gap-2 mb-4">
-              <input
-                type="text"
-                placeholder="Buscar producto..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-              />
+              <input type="text" placeholder="Buscar producto..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
             </div>
             <div className="flex gap-2 mb-4 flex-wrap">
               {['todos', ...categorias].map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setCategoriaFiltro(cat)}
-                  className={'px-3 py-1 rounded-lg text-xs transition-all ' + (categoriaFiltro === cat ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}
-                >
+                <button key={cat} onClick={() => setCategoriaFiltro(cat)} className={'px-3 py-1 rounded-lg text-xs transition-all ' + (categoriaFiltro === cat ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
                   {cat === 'todos' ? 'Todos' : cat}
                 </button>
               ))}
             </div>
-
             {categorias.filter(cat => categoriaFiltro === 'todos' || cat === categoriaFiltro).map((cat) => {
               const prods = productosFiltrados.filter(p => p.categoria === cat)
               if (prods.length === 0) return null
@@ -200,11 +178,7 @@ export default function VentasDiarias() {
                   <h3 className="text-xs text-gray-400 uppercase mb-3">{cat}</h3>
                   <div className="grid grid-cols-2 gap-3">
                     {prods.map((producto) => (
-                      <button
-                        key={producto.id}
-                        onClick={() => agregarAlCarrito(producto)}
-                        className="bg-gray-900 border border-gray-800 hover:border-blue-500 rounded-xl p-4 text-left transition-all"
-                      >
+                      <button key={producto.id} onClick={() => agregarAlCarrito(producto)} className="bg-gray-900 border border-gray-800 hover:border-blue-500 rounded-xl p-4 text-left transition-all">
                         <p className="text-sm font-medium">{producto.nombre}</p>
                         <p className="text-blue-400 font-bold mt-1">S/ {producto.precio}</p>
                       </button>
@@ -218,20 +192,40 @@ export default function VentasDiarias() {
           <div className="w-80 bg-gray-900 border-l border-gray-800 flex flex-col">
             <div className="p-4 border-b border-gray-800">
               <h3 className="font-semibold mb-3">Detalle de venta</h3>
-              <input
-                type="text"
-                placeholder="Nombre del paciente..."
-                value={paciente}
-                onChange={(e) => setPaciente(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Buscar cliente por nombre o DNI..."
+                  value={clienteSeleccionado ? clienteSeleccionado.nombres + ' ' + clienteSeleccionado.apellidos : busquedaCliente}
+                  onChange={(e) => { setBusquedaCliente(e.target.value); setClienteSeleccionado(null); setMostrarClientes(true) }}
+                  onFocus={() => setMostrarClientes(true)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                />
+                {mostrarClientes && busquedaCliente && (
+                  <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 z-10 max-h-48 overflow-auto">
+                    {clientesFiltrados.slice(0, 5).map(c => (
+                      <button key={c.id} onClick={() => { setClienteSeleccionado(c); setBusquedaCliente(''); setMostrarClientes(false) }} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm">
+                        <p>{c.nombres} {c.apellidos}</p>
+                        <p className="text-xs text-gray-400">{c.dni || 'Sin DNI'} — {c.ciudad || '-'}</p>
+                      </button>
+                    ))}
+                    <button onClick={() => { setMostrarClientes(false) }} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs text-blue-400 border-t border-gray-700">
+                      + Usar nombre sin registrar
+                    </button>
+                  </div>
+                )}
+              </div>
+              {clienteSeleccionado && (
+                <div className="mt-2 bg-blue-900 rounded-lg p-2 flex justify-between items-center">
+                  <p className="text-xs text-blue-300">{clienteSeleccionado.nombres} {clienteSeleccionado.apellidos}</p>
+                  <button onClick={() => setClienteSeleccionado(null)} className="text-blue-400 text-xs">X</button>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-auto p-4">
               {carrito.length === 0 ? (
-                <div className="text-center text-gray-500 text-sm py-8">
-                  Haz click en un producto para agregarlo
-                </div>
+                <div className="text-center text-gray-500 text-sm py-8">Haz click en un producto para agregarlo</div>
               ) : (
                 <div className="space-y-3">
                   {carrito.map((item) => (
@@ -261,43 +255,25 @@ export default function VentasDiarias() {
                   <span className="text-green-400">S/ {total}</span>
                 </div>
               </div>
-
               <div className="mb-3">
                 <p className="text-xs text-gray-400 mb-2">Metodo de pago</p>
                 <div className="grid grid-cols-3 gap-2">
                   {['efectivo', 'tarjeta', 'yape'].map((metodo) => (
-                    <button
-                      key={metodo}
-                      onClick={() => setMetodoPago(metodo)}
-                      className={'py-2 rounded-lg text-xs font-medium transition-all ' + (metodoPago === metodo ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700')}
-                    >
+                    <button key={metodo} onClick={() => setMetodoPago(metodo)} className={'py-2 rounded-lg text-xs font-medium transition-all ' + (metodoPago === metodo ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700')}>
                       {metodo.charAt(0).toUpperCase() + metodo.slice(1)}
                     </button>
                   ))}
                 </div>
               </div>
-
               <div className="mb-3 flex items-center gap-3">
                 <input type="checkbox" id="cuotas" checked={cuotas} onChange={(e) => setCuotas(e.target.checked)} className="w-4 h-4" />
-                <label htmlFor="cuotas" className="text-sm text-gray-300">Pago en cuotas</label>
+                <label htmlFor="cuotas" className="text-sm text-gray-300">Cuotas</label>
                 {cuotas && (
-                  <input
-                    type="number"
-                    min={2}
-                    max={24}
-                    value={numeroCuotas}
-                    onChange={(e) => setNumeroCuotas(Number(e.target.value))}
-                    className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
-                  />
+                  <input type="number" min={2} max={24} value={numeroCuotas} onChange={(e) => setNumeroCuotas(Number(e.target.value))} className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white" />
                 )}
                 {cuotas && <span className="text-xs text-gray-400">x S/ {Math.round(total / numeroCuotas)}</span>}
               </div>
-
-              <button
-                onClick={cobrar}
-                disabled={guardando}
-                className={'w-full text-white py-3 rounded-lg font-bold transition-all ' + (guardando ? 'bg-gray-600' : 'bg-green-600 hover:bg-green-700')}
-              >
+              <button onClick={cobrar} disabled={guardando} className={'w-full text-white py-3 rounded-lg font-bold transition-all ' + (guardando ? 'bg-gray-600' : 'bg-green-600 hover:bg-green-700')}>
                 {guardando ? 'Guardando...' : 'Cobrar S/ ' + total}
               </button>
             </div>
@@ -327,11 +303,17 @@ export default function VentasDiarias() {
                   <input type="text" onChange={(e) => setVentaEsp({...ventaEsp, optica: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">DNI / RUC</label>
+                  <input type="text" onChange={(e) => setVentaEsp({...ventaEsp, dni: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Codigo de producto</label>
                   <input type="text" onChange={(e) => setVentaEsp({...ventaEsp, codigo: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Monto de venta S/</label>
                   <input type="number" onChange={(e) => setVentaEsp({...ventaEsp, monto: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -339,6 +321,10 @@ export default function VentasDiarias() {
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Cantidad</label>
                   <input type="number" defaultValue={1} onChange={(e) => setVentaEsp({...ventaEsp, cantidad: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Descuento S/</label>
+                  <input type="number" defaultValue={0} onChange={(e) => setVentaEsp({...ventaEsp, descuento: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
@@ -374,7 +360,7 @@ export default function VentasDiarias() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Doctor responsable</label>
                   <input type="text" onChange={(e) => setVentaEsp({...ventaEsp, doctor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -382,10 +368,6 @@ export default function VentasDiarias() {
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Laboratorio</label>
                   <input type="text" onChange={(e) => setVentaEsp({...ventaEsp, laboratorio: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Descuento S/</label>
-                  <input type="number" defaultValue={0} onChange={(e) => setVentaEsp({...ventaEsp, descuento: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -408,15 +390,9 @@ export default function VentasDiarias() {
                 <label className="text-xs text-gray-400 mb-1 block">Comentarios</label>
                 <textarea onChange={(e) => setVentaEsp({...ventaEsp, comentarios: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
               </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Observaciones adicionales</label>
-                <textarea onChange={(e) => setVentaEsp({...ventaEsp, observaciones: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-16" />
-              </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setMostrarEspecializada(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">
-                Cancelar
-              </button>
+              <button onClick={() => setMostrarEspecializada(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
               <button
                 onClick={async () => {
                   const { error } = await supabase.from('ventas').insert([{
@@ -431,7 +407,7 @@ export default function VentasDiarias() {
                     numero_comprobante: ventaEsp.factura,
                   }])
                   if (error) { alert('Error: ' + error.message); return }
-                  alert('Venta especializada registrada correctamente')
+                  alert('Venta especializada registrada')
                   setMostrarEspecializada(false)
                 }}
                 className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg text-sm font-medium"

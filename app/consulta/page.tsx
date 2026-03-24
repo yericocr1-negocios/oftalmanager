@@ -1,17 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
-
-const menu = [
-  { icon: '🏠', label: 'Dashboard', href: '/' },
-  { icon: '👤', label: 'Pacientes', href: '/pacientes' },
-  { icon: '📅', label: 'Agenda', href: '/agenda' },
-  { icon: '💰', label: 'Ventas', href: '/ventas' },
-  { icon: '📦', label: 'Inventario', href: '/inventario' },
-  { icon: '💳', label: 'Finanzas', href: '/finanzas' },
-  { icon: '📊', label: 'Reportes', href: '/reportes' },
-  { icon: '⚙️', label: 'Config', href: '/configuracion' },
-]
+import Sidebar from '../../components/Sidebar'
 
 const campoVacio = { esferico: '', cilindro: '', eje: '', av_cc: '', dip: '', altura: '' }
 
@@ -38,10 +28,7 @@ export default function Consulta() {
 
   const dictar = () => {
     const SR = window.webkitSpeechRecognition || window.SpeechRecognition
-    if (!SR) {
-      alert('Tu navegador no soporta dictado. Usa Chrome.')
-      return
-    }
+    if (!SR) { alert('Tu navegador no soporta dictado. Usa Chrome.'); return }
     const recognition = new SR()
     recognition.lang = 'es-PE'
     recognition.continuous = false
@@ -131,20 +118,7 @@ export default function Consulta() {
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
-      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-xl font-bold text-blue-400">OFTALMANAGER</h1>
-        </div>
-        <nav className="flex-1 p-4 space-y-1">
-          {menu.map((item) => (
-            <a key={item.label} href={item.href} className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 text-sm">
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </nav>
-      </div>
-
+      <Sidebar />
       <div className="flex-1 overflow-auto">
         <div className="border-b border-gray-800 px-8 py-4 flex justify-between items-center">
           <div>

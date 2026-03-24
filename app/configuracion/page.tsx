@@ -1,16 +1,6 @@
 'use client'
 import { useState } from 'react'
-
-const menu = [
-  { icon: '🏠', label: 'Dashboard', href: '/' },
-  { icon: '👤', label: 'Pacientes', href: '/pacientes' },
-  { icon: '📅', label: 'Agenda', href: '/agenda' },
-  { icon: '💰', label: 'Ventas', href: '/ventas' },
-  { icon: '📦', label: 'Inventario', href: '/inventario' },
-  { icon: '💳', label: 'Finanzas', href: '/finanzas' },
-  { icon: '📊', label: 'Reportes', href: '/reportes' },
-  { icon: '⚙️', label: 'Config', href: '/configuracion' },
-]
+import Sidebar from '../../components/Sidebar'
 
 const usuarios = [
   { id: 1, nombre: 'Dr. Garcia', email: 'garcia@clinica.com', rol: 'doctor', sede: 'Lima', activo: true },
@@ -29,20 +19,7 @@ export default function Configuracion() {
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
-      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-xl font-bold text-blue-400">OFTALMANAGER</h1>
-        </div>
-        <nav className="flex-1 p-4 space-y-1">
-          {menu.map((item) => (
-            <a key={item.label} href={item.href} className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 text-sm">
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </nav>
-      </div>
-
+      <Sidebar />
       <div className="flex-1 overflow-auto">
         <div className="border-b border-gray-800 px-8 py-4">
           <h2 className="text-lg font-semibold">Configuracion</h2>
@@ -52,11 +29,7 @@ export default function Configuracion() {
         <div className="p-8">
           <div className="flex gap-3 mb-6">
             {['empresa', 'sedes', 'usuarios', 'permisos'].map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={'px-4 py-2 rounded-lg text-sm transition-all ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}
-              >
+              <button key={t} onClick={() => setTab(t)} className={'px-4 py-2 rounded-lg text-sm transition-all ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
@@ -86,9 +59,7 @@ export default function Configuracion() {
                   <label className="text-xs text-gray-400 mb-1 block">Direccion principal</label>
                   <input type="text" defaultValue="Av. Javier Prado 123, Lima" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
-                <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
-                  Guardar cambios
-                </button>
+                <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Guardar cambios</button>
               </div>
             </div>
           )}
@@ -152,9 +123,7 @@ export default function Configuracion() {
                     <tr key={u.id} className="border-b border-gray-800 hover:bg-gray-800">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold">
-                            {u.nombre[0]}
-                          </div>
+                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold">{u.nombre[0]}</div>
                           <div>
                             <p className="text-sm font-medium">{u.nombre}</p>
                             <p className="text-xs text-gray-400">{u.email}</p>
@@ -186,10 +155,10 @@ export default function Configuracion() {
               <h3 className="font-semibold mb-6">Permisos por rol</h3>
               <div className="space-y-4">
                 {[
-                  { rol: 'Admin', permisos: ['Dashboard', 'Pacientes', 'Agenda', 'Ventas', 'Inventario', 'Finanzas', 'Reportes', 'Configuracion'] },
-                  { rol: 'Doctor', permisos: ['Dashboard', 'Pacientes', 'Agenda'] },
-                  { rol: 'Vendedor', permisos: ['Dashboard', 'Pacientes', 'Ventas', 'Inventario'] },
-                  { rol: 'Recepcion', permisos: ['Dashboard', 'Pacientes', 'Agenda'] },
+                  { rol: 'Admin', permisos: ['Dashboard', 'Clientes', 'Agenda', 'Ventas', 'Control ventas', 'Inventario', 'Finanzas', 'Reportes', 'Configuracion'] },
+                  { rol: 'Doctor', permisos: ['Dashboard', 'Clientes', 'Agenda', 'Consulta'] },
+                  { rol: 'Vendedor', permisos: ['Dashboard', 'Clientes', 'Ventas', 'Control ventas', 'Inventario'] },
+                  { rol: 'Recepcion', permisos: ['Dashboard', 'Clientes', 'Agenda'] },
                 ].map((r) => (
                   <div key={r.rol} className="border border-gray-800 rounded-xl p-4">
                     <p className="font-medium mb-3">{r.rol}</p>

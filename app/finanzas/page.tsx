@@ -1,22 +1,12 @@
 'use client'
 import { useState } from 'react'
-
-const menu = [
-  { icon: '🏠', label: 'Dashboard', href: '/' },
-  { icon: '👤', label: 'Pacientes', href: '/pacientes' },
-  { icon: '📅', label: 'Agenda', href: '/agenda' },
-  { icon: '💰', label: 'Ventas', href: '/ventas' },
-  { icon: '📦', label: 'Inventario', href: '/inventario' },
-  { icon: '💳', label: 'Finanzas', href: '/finanzas' },
-  { icon: '📊', label: 'Reportes', href: '/reportes' },
-  { icon: '⚙️', label: 'Config', href: '/configuracion' },
-]
+import Sidebar from '../../components/Sidebar'
 
 const movimientosIniciales = [
-  { id: 1, fecha: '2024-01-15', hora: '09:30', concepto: 'Venta - Juan Perez', sucursal: 'Lima', numero: 'OP-001', metodo: 'yape', tipo: 'ingreso', monto: 350 },
-  { id: 2, fecha: '2024-01-15', hora: '10:15', concepto: 'Consulta - Maria Lopez', sucursal: 'Lima', numero: 'OP-002', metodo: 'efectivo', tipo: 'ingreso', monto: 120 },
-  { id: 3, fecha: '2024-01-15', hora: '11:00', concepto: 'Compra monturas', sucursal: 'Lima', numero: 'OP-003', metodo: 'transferencia', tipo: 'egreso', monto: 800 },
-  { id: 4, fecha: '2024-01-15', hora: '15:00', concepto: 'Cirugia - Ana Flores', sucursal: 'Lima', numero: 'OP-004', metodo: 'transferencia', tipo: 'ingreso', monto: 2500 },
+  { id: 1, fecha: '2024-01-15', hora: '09:30', cliente: 'Juan Perez', concepto: 'Venta - Lentes', sucursal: 'Lima', numero: 'OP-001', metodo: 'yape', tipo: 'ingreso', monto: 350 },
+  { id: 2, fecha: '2024-01-15', hora: '10:15', cliente: 'Maria Lopez', concepto: 'Consulta General', sucursal: 'Lima', numero: 'OP-002', metodo: 'efectivo', tipo: 'ingreso', monto: 120 },
+  { id: 3, fecha: '2024-01-15', hora: '11:00', cliente: 'Proveedor Optico', concepto: 'Compra monturas', sucursal: 'Lima', numero: 'OP-003', metodo: 'transferencia', tipo: 'egreso', monto: 800 },
+  { id: 4, fecha: '2024-01-15', hora: '15:00', cliente: 'Ana Flores', concepto: 'Cirugia Catarata', sucursal: 'Lima', numero: 'OP-004', metodo: 'transferencia', tipo: 'ingreso', monto: 2500 },
 ]
 
 const cobrarIniciales = [
@@ -38,7 +28,7 @@ export default function Finanzas() {
   const [mostrarCobrar, setMostrarCobrar] = useState(false)
   const [mostrarPagar, setMostrarPagar] = useState(false)
 
-  const [nuevoMov, setNuevoMov] = useState({ concepto: '', sucursal: '', numero: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
+  const [nuevoMov, setNuevoMov] = useState({ cliente: '', concepto: '', sucursal: '', numero: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
   const [nuevoCobrar, setNuevoCobrar] = useState({ cliente: '', empresa: '', tipo: 'paciente', dni: '', telefono: '', tipoIngreso: 'consulta', descripcion: '', total: 0, cuotas: 1, fechaVencimiento: '', vendedor: '', sede: '', comprobante: 'boleta', numeroComp: '' })
   const [nuevoPagar, setNuevoPagar] = useState({ proveedor: '', empresa: '', ruc: '', tipoProveedor: 'laboratorio', producto: '', cantidad: 0, costoUnitario: 0, fechaVencimiento: '', sede: '', numeroFactura: '' })
 
@@ -47,7 +37,7 @@ export default function Finanzas() {
   const totalCobrar = cobrar.reduce((sum, c) => sum + (c.total - c.pagado), 0)
   const totalPagar = pagar.reduce((sum, c) => sum + (c.total - c.pagado), 0)
 
-  const estadoColor: Record<string, string> = {
+  const estadoColor = {
     pendiente: 'bg-yellow-900 text-yellow-400',
     parcial: 'bg-blue-900 text-blue-400',
     pagado: 'bg-green-900 text-green-400',
@@ -58,7 +48,7 @@ export default function Finanzas() {
     const ahora = new Date()
     setMovimientos([...movimientos, { ...nuevoMov, id: movimientos.length + 1, fecha: ahora.toISOString().split('T')[0], hora: ahora.toTimeString().slice(0, 5) }])
     setMostrarMov(false)
-    setNuevoMov({ concepto: '', sucursal: '', numero: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
+    setNuevoMov({ cliente: '', concepto: '', sucursal: '', numero: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
   }
 
   const guardarCobrar = () => {
@@ -74,20 +64,7 @@ export default function Finanzas() {
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
-      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-xl font-bold text-blue-400">OFTALMANAGER</h1>
-        </div>
-        <nav className="flex-1 p-4 space-y-1">
-          {menu.map((item) => (
-            <a key={item.label} href={item.href} className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 text-sm">
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </nav>
-      </div>
-
+      <Sidebar />
       <div className="flex-1 overflow-auto">
         <div className="border-b border-gray-800 px-8 py-4 flex justify-between items-center">
           <div>
@@ -135,6 +112,7 @@ export default function Finanzas() {
                 <thead>
                   <tr className="border-b border-gray-800">
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Dia / Hora</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Cliente</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Concepto</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Sucursal</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">N° Operacion</th>
@@ -147,6 +125,7 @@ export default function Finanzas() {
                   {movimientos.map((m) => (
                     <tr key={m.id} className="border-b border-gray-800 hover:bg-gray-800">
                       <td className="px-4 py-3 text-xs text-gray-400">{m.fecha} {m.hora}</td>
+                      <td className="px-4 py-3 text-sm">{m.cliente || '-'}</td>
                       <td className="px-4 py-3 text-sm">{m.concepto}</td>
                       <td className="px-4 py-3 text-sm text-gray-300">{m.sucursal || '-'}</td>
                       <td className="px-4 py-3 text-xs text-gray-400 font-mono">{m.numero || '-'}</td>
@@ -260,6 +239,10 @@ export default function Finanzas() {
               <button onClick={() => setMostrarMov(false)} className="text-gray-400 hover:text-white text-xl">X</button>
             </div>
             <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Cliente / Paciente</label>
+                <input type="text" value={nuevoMov.cliente} onChange={(e) => setNuevoMov({...nuevoMov, cliente: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">Concepto</label>
                 <input type="text" value={nuevoMov.concepto} onChange={(e) => setNuevoMov({...nuevoMov, concepto: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />

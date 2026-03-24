@@ -1,15 +1,5 @@
 'use client'
-
-const menu = [
-  { icon: '🏠', label: 'Dashboard', href: '/' },
-  { icon: '👤', label: 'Pacientes', href: '/pacientes' },
-  { icon: '📅', label: 'Agenda', href: '/agenda' },
-  { icon: '💰', label: 'Ventas', href: '/ventas' },
-  { icon: '📦', label: 'Inventario', href: '/inventario' },
-  { icon: '💳', label: 'Finanzas', href: '/finanzas' },
-  { icon: '📊', label: 'Reportes', href: '/reportes' },
-  { icon: '⚙️', label: 'Config', href: '/configuracion' },
-]
+import Sidebar from '../../components/Sidebar'
 
 const ventasPorDia = [
   { dia: 'Lun', ventas: 1200 },
@@ -40,20 +30,7 @@ const maxVenta = Math.max(...ventasPorDia.map(v => v.ventas))
 export default function Reportes() {
   return (
     <div className="flex h-screen bg-gray-950 text-white">
-      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-xl font-bold text-blue-400">OFTALMANAGER</h1>
-        </div>
-        <nav className="flex-1 p-4 space-y-1">
-          {menu.map((item) => (
-            <a key={item.label} href={item.href} className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 text-sm">
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </nav>
-      </div>
-
+      <Sidebar />
       <div className="flex-1 overflow-auto">
         <div className="border-b border-gray-800 px-8 py-4">
           <h2 className="text-lg font-semibold">Reportes</h2>
@@ -85,10 +62,7 @@ export default function Reportes() {
                 {ventasPorDia.map((v) => (
                   <div key={v.dia} className="flex-1 flex flex-col items-center gap-2">
                     <p className="text-xs text-gray-400">S/{v.ventas}</p>
-                    <div
-                      className="w-full bg-blue-600 rounded-t-md transition-all"
-                      style={{ height: (v.ventas / maxVenta * 100) + '%' }}
-                    ></div>
+                    <div className="w-full bg-blue-600 rounded-t-md" style={{ height: (v.ventas / maxVenta * 100) + '%' }}></div>
                     <p className="text-xs text-gray-400">{v.dia}</p>
                   </div>
                 ))}
@@ -105,10 +79,7 @@ export default function Reportes() {
                       <span className="text-green-400">S/ {d.monto.toLocaleString()}</span>
                     </div>
                     <div className="w-full bg-gray-800 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: (d.monto / 8500 * 100) + '%' }}
-                      ></div>
+                      <div className="bg-blue-600 h-2 rounded-full" style={{ width: (d.monto / 8500 * 100) + '%' }}></div>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">{d.ventas} ventas</p>
                   </div>
@@ -152,4 +123,3 @@ export default function Reportes() {
     </div>
   )
 }
-
