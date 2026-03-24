@@ -12,12 +12,17 @@ export default function Login() {
     if (!email || !password) { setError('Completa todos los campos'); return }
     setCargando(true)
     setError('')
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
     if (error) {
-      setError('Email o contraseña incorrectos')
+      setError('Email o contraseña incorrectos: ' + error.message)
       setCargando(false)
-    } else {
-      window.location.href = '/'
+      return
+    }
+
+    if (data.session) {
+      window.location.replace('/')
     }
   }
 
@@ -69,15 +74,7 @@ export default function Login() {
           >
             {cargando ? 'Iniciando sesion...' : 'Entrar'}
           </button>
-
-          <p className="text-center text-gray-500 text-xs mt-4">
-            ¿Olvidaste tu contraseña? Contacta al administrador
-          </p>
         </div>
-
-        <p className="text-center text-gray-600 text-xs mt-6">
-          OFTALMANAGER v1.0 — Sistema ERP oftalmologico
-        </p>
       </div>
     </div>
   )
