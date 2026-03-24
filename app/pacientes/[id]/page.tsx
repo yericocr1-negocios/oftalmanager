@@ -1,17 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
-
-const menu = [
-  { icon: '🏠', label: 'Dashboard', href: '/' },
-  { icon: '👤', label: 'Pacientes', href: '/pacientes' },
-  { icon: '📅', label: 'Agenda', href: '/agenda' },
-  { icon: '💰', label: 'Ventas', href: '/ventas' },
-  { icon: '📦', label: 'Inventario', href: '/inventario' },
-  { icon: '💳', label: 'Finanzas', href: '/finanzas' },
-  { icon: '📊', label: 'Reportes', href: '/reportes' },
-  { icon: '⚙️', label: 'Config', href: '/configuracion' },
-]
+import Sidebar from '../../../components/Sidebar'
 
 const campoVacio = { esferico: '', cilindro: '', eje: '', av_cc: '', dip: '', altura: '' }
 
@@ -31,7 +21,6 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   const [paciente, setPaciente] = useState<Paciente | null>(null)
   const [tab, setTab] = useState('datos')
   const [cargando, setCargando] = useState(true)
-
   const [doctor, setDoctor] = useState('')
   const [fecha, setFecha] = useState('')
   const [tipoPrescripcion, setTipoPrescripcion] = useState('')
@@ -74,13 +63,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   }, [])
 
   const InputCampo = ({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) => (
-    <input
-      type="text"
-      placeholder={label}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 text-center"
-    />
+    <input type="text" placeholder={label} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 text-center" />
   )
 
   const FilaOjo = ({ ojo, data, setData, conAdicion }: { ojo: string, data: any, setData: any, conAdicion: boolean }) => (
@@ -92,9 +75,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
       <td className="px-1 py-2"><InputCampo label="20/" value={data.av_cc} onChange={(v) => setData({...data, av_cc: v})} /></td>
       <td className="px-1 py-2"><InputCampo label="mm" value={data.dip} onChange={(v) => setData({...data, dip: v})} /></td>
       <td className="px-1 py-2"><InputCampo label="mm" value={data.altura} onChange={(v) => setData({...data, altura: v})} /></td>
-      {conAdicion && (
-        <td className="px-1 py-2"><InputCampo label="+/-" value={adicionMedia} onChange={setAdicionMedia} /></td>
-      )}
+      {conAdicion && <td className="px-1 py-2"><InputCampo label="+/-" value={adicionMedia} onChange={setAdicionMedia} /></td>}
     </tr>
   )
 
@@ -140,23 +121,10 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
-      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-xl font-bold text-blue-400">OFTALMANAGER</h1>
-        </div>
-        <nav className="flex-1 p-4 space-y-1">
-          {menu.map((item) => (
-            <a key={item.label} href={item.href} className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 text-sm">
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </nav>
-      </div>
-
+      <Sidebar />
       <div className="flex-1 overflow-auto">
         <div className="border-b border-gray-800 px-8 py-4 flex items-center gap-4">
-          <a href="/pacientes" className="text-gray-400 hover:text-white text-sm">← Pacientes</a>
+          <a href="/pacientes" className="text-gray-400 hover:text-white text-sm">← Clientes</a>
           <span className="text-gray-600">/</span>
           <h2 className="text-lg font-semibold">{paciente.nombres} {paciente.apellidos}</h2>
         </div>
@@ -181,11 +149,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
 
           <div className="flex gap-3 mb-6">
             {['datos', 'historia', 'compras', 'citas'].map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={'px-4 py-2 rounded-lg text-sm transition-all ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}
-              >
+              <button key={t} onClick={() => setTab(t)} className={'px-4 py-2 rounded-lg text-sm transition-all ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
                 {t === 'datos' ? 'Datos' : t === 'historia' ? 'Historia Clinica' : t === 'compras' ? 'Compras' : 'Citas'}
               </button>
             ))}
@@ -204,7 +168,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                   <input type="text" defaultValue={paciente.apellidos} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">DNI</label>
+                  <label className="text-xs text-gray-400 mb-1 block">DNI / RUC</label>
                   <input type="text" defaultValue={paciente.dni || ''} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
@@ -219,10 +183,12 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                   <label className="text-xs text-gray-400 mb-1 block">Ciudad</label>
                   <input type="text" defaultValue={paciente.ciudad || ''} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-gray-400 mb-1 block">Direccion</label>
+                  <input type="text" defaultValue={paciente.direccion || ''} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
               </div>
-              <button className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
-                Guardar cambios
-              </button>
+              <button className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Guardar cambios</button>
             </div>
           )}
 
@@ -233,7 +199,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Doctor / Optometra</label>
-                    <input type="text" value={doctor} onChange={(e) => setDoctor(e.target.value)} placeholder="Nombre del doctor" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    <input type="text" value={doctor} onChange={(e) => setDoctor(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Fecha</label>
@@ -259,57 +225,33 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
 
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
                 <h3 className="font-semibold">Historia clinica</h3>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Razon de la consulta</label>
-                  <textarea value={razonConsulta} onChange={(e) => setRazonConsulta(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Sintomatologia</label>
-                  <textarea value={sintomatologia} onChange={(e) => setSintomatologia(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Diagnostico</label>
-                  <textarea value={diagnostico} onChange={(e) => setDiagnostico(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Tratamiento</label>
-                  <textarea value={tratamiento} onChange={(e) => setTratamiento(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Historia ocular</label>
-                  <textarea value={historiaOcular} onChange={(e) => setHistoriaOcular(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Historial familiar ocular</label>
-                  <textarea value={historialFamiliar} onChange={(e) => setHistorialFamiliar(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Comentarios</label>
-                  <textarea value={comentarios} onChange={(e) => setComentarios(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
-                </div>
+                {[
+                  { label: 'Razon de la consulta', value: razonConsulta, set: setRazonConsulta },
+                  { label: 'Sintomatologia', value: sintomatologia, set: setSintomatologia },
+                  { label: 'Diagnostico', value: diagnostico, set: setDiagnostico },
+                  { label: 'Tratamiento', value: tratamiento, set: setTratamiento },
+                  { label: 'Historia ocular', value: historiaOcular, set: setHistoriaOcular },
+                  { label: 'Historial familiar ocular', value: historialFamiliar, set: setHistorialFamiliar },
+                  { label: 'Comentarios', value: comentarios, set: setComentarios },
+                ].map((campo) => (
+                  <div key={campo.label}>
+                    <label className="text-xs text-gray-400 mb-1 block">{campo.label}</label>
+                    <textarea value={campo.value} onChange={(e) => campo.set(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
+                  </div>
+                ))}
               </div>
 
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <h3 className="font-semibold mb-4">Antecedentes</h3>
                 <div className="flex flex-wrap gap-3 mb-4">
                   {antecedentesOpciones.map((op) => (
-                    <button
-                      key={op}
-                      onClick={() => toggleAntecedente(op)}
-                      className={'px-4 py-2 rounded-lg text-sm transition-all ' + (antecedentes.includes(op) ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700')}
-                    >
+                    <button key={op} onClick={() => toggleAntecedente(op)} className={'px-4 py-2 rounded-lg text-sm transition-all ' + (antecedentes.includes(op) ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700')}>
                       {op}
                     </button>
                   ))}
                 </div>
                 {antecedentes.includes('Otro') && (
-                  <input
-                    type="text"
-                    placeholder="Describe el antecedente..."
-                    value={otroAntecedente}
-                    onChange={(e) => setOtroAntecedente(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                  />
+                  <input type="text" placeholder="Describe el antecedente..." value={otroAntecedente} onChange={(e) => setOtroAntecedente(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 )}
               </div>
 
