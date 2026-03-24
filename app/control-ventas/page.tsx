@@ -1,14 +1,15 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from '../../components/Sidebar'
+import { supabase } from '../../lib/supabase'
 
 const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
 const ventasEjemplo = [
-  { id: 1, mes: 'Marzo', cliente: 'OPTICA ESPEJO', ciudad: 'Lima', vendedor: 'Alm', monto: 90, cantidad: 2, facturadoPor: 'Vortex Neg', fecha: '3/2/2026', guia: 'FAC 499', comentarios: 'PAGO 05/02/2026', tipoPago: 'contado', cuotas: 0, fechasPago: [], status: 'verde' },
-  { id: 2, mes: 'Marzo', cliente: 'OPTICA MOGOLLON', ciudad: 'Piura', vendedor: 'Alm', monto: 420, cantidad: 8, facturadoPor: 'All In One', fecha: '3/2/2026', guia: 'FAC 246', comentarios: '', tipoPago: 'contado', cuotas: 0, fechasPago: [], status: 'verde' },
-  { id: 3, mes: 'Marzo', cliente: 'INTEGRAMED', ciudad: 'Piura', vendedor: '', monto: 2410, cantidad: 38, facturadoPor: 'Corp. Vortex', fecha: '9/2/2026', guia: 'FAC 614', comentarios: '', tipoPago: 'credito', cuotas: 3, fechasPago: ['11/03/2026', '11/04/2026', '11/05/2026'], status: 'naranja' },
-  { id: 4, mes: 'Marzo', cliente: 'ALFRED ARROYO CUEVA', ciudad: 'Lima', vendedor: 'Alm', monto: 482, cantidad: 8, facturadoPor: 'Vortex Neg', fecha: '3/2/2026', guia: 'FAC 500', comentarios: 'PAGO 05/02/2026 VIA YAPE', tipoPago: 'contado', cuotas: 0, fechasPago: [], status: 'verde' },
+  { id: 1, mes: 'Marzo', cliente: 'OPTICA ESPEJO', dni: '', ciudad: 'Lima', vendedor: 'Alm', monto: 90, cantidad: 2, facturadoPor: 'Vortex Neg', fecha: '3/2/2026', guia: 'FAC 499', comentarios: 'PAGO 05/02/2026', tipoPago: 'contado', cuotas: 0, fechasPago: '', status: 'verde' },
+  { id: 2, mes: 'Marzo', cliente: 'OPTICA MOGOLLON', dni: '', ciudad: 'Piura', vendedor: 'Alm', monto: 420, cantidad: 8, facturadoPor: 'All In One', fecha: '3/2/2026', guia: 'FAC 246', comentarios: '', tipoPago: 'contado', cuotas: 0, fechasPago: '', status: 'verde' },
+  { id: 3, mes: 'Marzo', cliente: 'INTEGRAMED', dni: '', ciudad: 'Piura', vendedor: '', monto: 2410, cantidad: 38, facturadoPor: 'Corp. Vortex', fecha: '9/2/2026', guia: 'FAC 614', comentarios: '', tipoPago: 'credito', cuotas: 3, fechasPago: '11/03/2026, 11/04/2026, 11/05/2026', status: 'naranja' },
+  { id: 4, mes: 'Marzo', cliente: 'ALFRED ARROYO CUEVA', dni: '', ciudad: 'Lima', vendedor: 'Alm', monto: 482, cantidad: 8, facturadoPor: 'Vortex Neg', fecha: '3/2/2026', guia: 'FAC 500', comentarios: 'PAGO 05/02/2026 VIA YAPE', tipoPago: 'contado', cuotas: 0, fechasPago: '', status: 'verde' },
 ]
 
 const statusColors = {
@@ -19,14 +20,31 @@ const statusColors = {
 
 export default function ControlVentas() {
   const [ventas, setVentas] = useState(ventasEjemplo)
+  const [clientes, setClientes] = useState([])
   const [filtroMes, setFiltroMes] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [mostrarNueva, setMostrarNueva] = useState(false)
+  const [busquedaCliente, setBusquedaCliente] = useState({})
+  const [mostrarDropdown, setMostrarDropdown] = useState(null)
   const [nueva, setNueva] = useState({
-    mes: 'Marzo', cliente: '', ciudad: '', vendedor: '', monto: 0,
+    mes: 'Marzo', cliente: '', dni: '', ciudad: '', vendedor: '', monto: 0,
     cantidad: 1, facturadoPor: '', fecha: '', guia: '', comentarios: '',
-    tipoPago: 'contado', cuotas: 0, fechasPago: [], status: 'verde'
+    tipoPago: 'contado', cuotas: 0, fechasPago: '', status: 'verde'
   })
+
+  useEffect(() => {
+    cargarClientes()
+  }, [])
+
+  const cargarClientes = async () => {
+    const { data } = await supabase.from('pacientes').select('id, nombres, apellidos, dni, ciudad').order('nombres')
+    setClientes(data || [])
+  }
+
+  const clientesFiltrados = (texto) => clientes.filter(c =>
+    (c.nombres + ' ' + c.apellidos).toLowerCase().includes(texto.toLowerCase()) ||
+    (c.dni || '').includes(texto)
+  ).slice(0, 5)
 
   const filtradas = ventas.filter(v => {
     const coincideBusqueda = v.cliente.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -39,18 +57,25 @@ export default function ControlVentas() {
   const totalMonto = filtradas.reduce((sum, v) => sum + v.monto, 0)
   const totalCantidad = filtradas.reduce((sum, v) => sum + v.cantidad, 0)
 
-  const cambiarStatus = (id, status) => {
-    setVentas(ventas.map(v => v.id === id ? { ...v, status } : v))
-  }
-
   const editarCampo = (id, campo, valor) => {
     setVentas(ventas.map(v => v.id === id ? { ...v, [campo]: valor } : v))
+  }
+
+  const seleccionarCliente = (ventaId, cliente) => {
+    setVentas(ventas.map(v => v.id === ventaId ? {
+      ...v,
+      cliente: cliente.nombres + ' ' + cliente.apellidos,
+      dni: cliente.dni || '',
+      ciudad: cliente.ciudad || ''
+    } : v))
+    setMostrarDropdown(null)
+    setBusquedaCliente({})
   }
 
   const guardarNueva = () => {
     setVentas([...ventas, { ...nueva, id: ventas.length + 1 }])
     setMostrarNueva(false)
-    setNueva({ mes: 'Marzo', cliente: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturadoPor: '', fecha: '', guia: '', comentarios: '', tipoPago: 'contado', cuotas: 0, fechasPago: [], status: 'verde' })
+    setNueva({ mes: 'Marzo', cliente: '', dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturadoPor: '', fecha: '', guia: '', comentarios: '', tipoPago: 'contado', cuotas: 0, fechasPago: '', status: 'verde' })
   }
 
   return (
@@ -92,6 +117,7 @@ export default function ControlVentas() {
                 <tr className="bg-gray-800">
                   <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Mes</th>
                   <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Cliente</th>
+                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">RUC/DNI</th>
                   <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Ciudad</th>
                   <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Vendedor</th>
                   <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Monto</th>
@@ -114,8 +140,36 @@ export default function ControlVentas() {
                         {meses.map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
                     </td>
+                    <td className="px-2 py-2 border border-gray-700 relative">
+                      <div className="flex gap-1 items-center">
+                        <input
+                          value={busquedaCliente[v.id] !== undefined ? busquedaCliente[v.id] : v.cliente}
+                          onChange={(e) => {
+                            setBusquedaCliente({...busquedaCliente, [v.id]: e.target.value})
+                            editarCampo(v.id, 'cliente', e.target.value)
+                            setMostrarDropdown(v.id)
+                          }}
+                          onFocus={() => setMostrarDropdown(v.id)}
+                          className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32"
+                        />
+                      </div>
+                      {mostrarDropdown === v.id && (busquedaCliente[v.id] || '').length > 0 && (
+                        <div className="absolute top-full left-0 bg-gray-800 border border-gray-600 rounded-lg z-20 w-48 max-h-32 overflow-auto">
+                          {clientesFiltrados(busquedaCliente[v.id] || '').map(c => (
+                            <button
+                              key={c.id}
+                              onClick={() => seleccionarCliente(v.id, c)}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs"
+                            >
+                              <p>{c.nombres} {c.apellidos}</p>
+                              <p className="text-gray-400">{c.dni || 'Sin DNI'}</p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-2 py-2 border border-gray-700">
-                      <input value={v.cliente} onChange={(e) => editarCampo(v.id, 'cliente', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32" />
+                      <input value={v.dni} onChange={(e) => editarCampo(v.id, 'dni', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" />
                     </td>
                     <td className="px-2 py-2 border border-gray-700">
                       <input value={v.ciudad} onChange={(e) => editarCampo(v.id, 'ciudad', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-20" />
@@ -153,14 +207,17 @@ export default function ControlVentas() {
                       ) : <span className="text-gray-500 text-xs">-</span>}
                     </td>
                     <td className="px-2 py-2 border border-gray-700">
-                      {v.tipoPago === 'credito' && v.fechasPago.length > 0 ? (
-                        <div className="text-xs text-gray-300">{v.fechasPago.join(', ')}</div>
-                      ) : <span className="text-gray-500 text-xs">-</span>}
+                      <input
+                        value={v.fechasPago}
+                        onChange={(e) => editarCampo(v.id, 'fechasPago', e.target.value)}
+                        placeholder="ej: 01/04, 01/05"
+                        className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32"
+                      />
                     </td>
                     <td className="px-2 py-2 border border-gray-700">
                       <select
                         value={v.status}
-                        onChange={(e) => cambiarStatus(v.id, e.target.value)}
+                        onChange={(e) => editarCampo(v.id, 'status', e.target.value)}
                         className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusColors[v.status]}
                       >
                         <option value="verde">Verde</option>
@@ -173,7 +230,7 @@ export default function ControlVentas() {
               </tbody>
               <tfoot>
                 <tr className="bg-gray-800 font-bold">
-                  <td colSpan={4} className="px-3 py-3 text-sm border border-gray-700">TOTAL</td>
+                  <td colSpan={5} className="px-3 py-3 text-sm border border-gray-700">TOTAL</td>
                   <td className="px-3 py-3 text-sm text-green-400 border border-gray-700">S/ {totalMonto.toLocaleString()}</td>
                   <td className="px-3 py-3 text-sm text-blue-400 border border-gray-700">{totalCantidad}</td>
                   <td colSpan={8} className="border border-gray-700"></td>
@@ -204,11 +261,15 @@ export default function ControlVentas() {
                   <input type="text" onChange={(e) => setNueva({...nueva, cliente: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Ciudad</label>
-                  <input type="text" onChange={(e) => setNueva({...nueva, ciudad: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <label className="text-xs text-gray-400 mb-1 block">RUC / DNI</label>
+                  <input type="text" onChange={(e) => setNueva({...nueva, dni: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Ciudad</label>
+                  <input type="text" onChange={(e) => setNueva({...nueva, ciudad: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Vendedor / Encargado</label>
                   <input type="text" onChange={(e) => setNueva({...nueva, vendedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -217,12 +278,12 @@ export default function ControlVentas() {
                   <label className="text-xs text-gray-400 mb-1 block">Monto S/</label>
                   <input type="number" onChange={(e) => setNueva({...nueva, monto: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Cantidad</label>
                   <input type="number" defaultValue={1} onChange={(e) => setNueva({...nueva, cantidad: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Facturado por</label>
                   <input type="text" onChange={(e) => setNueva({...nueva, facturadoPor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -231,12 +292,12 @@ export default function ControlVentas() {
                   <label className="text-xs text-gray-400 mb-1 block">Fecha de venta</label>
                   <input type="date" onChange={(e) => setNueva({...nueva, fecha: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">N° Guia / Factura</label>
                   <input type="text" onChange={(e) => setNueva({...nueva, guia: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Tipo de pago</label>
                   <select value={nueva.tipoPago} onChange={(e) => setNueva({...nueva, tipoPago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
@@ -244,13 +305,19 @@ export default function ControlVentas() {
                     <option value="credito">Credito</option>
                   </select>
                 </div>
-                {nueva.tipoPago === 'credito' && (
+              </div>
+              {nueva.tipoPago === 'credito' && (
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Numero de cuotas</label>
                     <input type="number" min={2} defaultValue={2} onChange={(e) => setNueva({...nueva, cuotas: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                   </div>
-                )}
-              </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Fechas de pago</label>
+                    <input type="text" placeholder="ej: 01/04/2026, 01/05/2026" onChange={(e) => setNueva({...nueva, fechasPago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">Comentarios</label>
                 <textarea onChange={(e) => setNueva({...nueva, comentarios: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
