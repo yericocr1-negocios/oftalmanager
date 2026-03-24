@@ -21,6 +21,8 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   const [paciente, setPaciente] = useState<Paciente | null>(null)
   const [tab, setTab] = useState('datos')
   const [cargando, setCargando] = useState(true)
+  const [compras, setCompras] = useState([])
+  const [citas, setCitas] = useState([])
   const [doctor, setDoctor] = useState('')
   const [fecha, setFecha] = useState('')
   const [tipoPrescripcion, setTipoPrescripcion] = useState('')
@@ -52,15 +54,26 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   }
 
   useEffect(() => {
-    const cargarPaciente = async () => {
-      setCargando(true)
-      const id = window.location.pathname.split('/').pop()
-      const { data } = await supabase.from('pacientes').select('*').eq('id', id).single()
-      setPaciente(data)
-      setCargando(false)
-    }
-    cargarPaciente()
+    const id = window.location.pathname.split('/').pop()
+    cargarPaciente(id)
+    cargarCompras(id)
   }, [])
+
+  const cargarPaciente = async (id) => {
+    setCargando(true)
+    const { data } = await supabase.from('pacientes').select('*').eq('id', id).single()
+    setPaciente(data)
+    setCargando(false)
+  }
+
+  const cargarCompras = async (id) => {
+    const { data } = await supabase
+      .from('ventas')
+      .select('*, ventas_detalle(*)')
+      .eq('paciente_id', id)
+      .order('created_at', { ascending: false })
+    setCompras(data || [])
+  }
 
   const InputCampo = ({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) => (
     <input type="text" placeholder={label} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 text-center" />
@@ -262,12 +275,53 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
           )}
 
           {tab === 'compras' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <h3 className="font-semibold mb-6">Historial de compras</h3>
-              <div className="text-center text-gray-400 py-12">
-                <p className="text-4xl mb-4">🛒</p>
-                <p>No hay compras registradas aun</p>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-800">
+                <h3 className="font-semibold">Historial de compras</h3>
               </div>
+              {compras.length === 0 ? (
+                <div className="text-center text-gray-400 py-12">
+                  <p className="text-4xl mb-4">🛒</p>
+                  <p>No hay compras registradas aun</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-800">
+                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Fecha</th>
+                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Productos</th>
+                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Metodo pago</th>
+                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Total</th>
+                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {compras.map((v) => (
+                      <tr key={v.id} className="border-b border-gray-800 hover:bg-gray-800">
+                        <td className="px-6 py-4 text-sm text-gray-300">
+                          {new Date(v.created_at).toLocaleDateString('es-PE')}
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          {v.ventas_detalle && v.ventas_detalle.length > 0 ? (
+                            <div>
+                              {v.ventas_detalle.map((d, i) => (
+                                <p key={i} className="text-xs text-gray-300">{d.cantidad}x — S/ {d.precio_unitario}</p>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-500 text-xs">{v.notas || '-'}</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-300 capitalize">{v.metodo_pago || '-'}</td>
+                        <td className="px-6 py-4 text-sm font-bold text-green-400">S/ {v.total}</td>
+                        <td className="px-6 py-4">
+                          <span className="bg-green-900 text-green-400 text-xs px-2 py-1 rounded-full">{v.estado}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
 
