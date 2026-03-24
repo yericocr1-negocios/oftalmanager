@@ -1,18 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
-
-const menu = [
-  { icon: '🏠', label: 'Dashboard', href: '/' },
-  { icon: '👤', label: 'Clientes (pacientes)', href: '/pacientes' },
-  { icon: '📅', label: 'Agenda', href: '/agenda' },
-  { icon: '💰', label: 'Ventas diarias', href: '/ventas' },
-  { icon: '📊', label: 'Control de ventas', href: '/control-ventas' },
-  { icon: '📦', label: 'Inventario', href: '/inventario' },
-  { icon: '💳', label: 'Finanzas', href: '/finanzas' },
-  { icon: '📈', label: 'Reportes', href: '/reportes' },
-  { icon: '⚙️', label: 'Config', href: '/configuracion' },
-]
+import { useState } from 'react'
+import Sidebar from '../../components/Sidebar'
 
 const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
@@ -34,7 +22,6 @@ export default function ControlVentas() {
   const [filtroMes, setFiltroMes] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [mostrarNueva, setMostrarNueva] = useState(false)
-  const [editando, setEditando] = useState(null)
   const [nueva, setNueva] = useState({
     mes: 'Marzo', cliente: '', ciudad: '', vendedor: '', monto: 0,
     cantidad: 1, facturadoPor: '', fecha: '', guia: '', comentarios: '',
@@ -68,20 +55,7 @@ export default function ControlVentas() {
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
-      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-xl font-bold text-blue-400">OFTALMANAGER</h1>
-        </div>
-        <nav className="flex-1 p-4 space-y-1">
-          {menu.map((item) => (
-            <a key={item.label} href={item.href} className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 text-sm">
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </nav>
-      </div>
-
+      <Sidebar />
       <div className="flex-1 overflow-auto">
         <div className="border-b border-gray-800 px-8 py-4 flex justify-between items-center">
           <div>
