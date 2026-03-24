@@ -1,27 +1,29 @@
 export default function Home() {
   const menu = [
     { icon: '🏠', label: 'Dashboard', href: '/' },
-    { icon: '👤', label: 'Pacientes', href: '/pacientes' },
+    { icon: '👤', label: 'Clientes (pacientes)', href: '/pacientes' },
     { icon: '📅', label: 'Agenda', href: '/agenda' },
-    { icon: '💰', label: 'Ventas', href: '/ventas' },
+    { icon: '💰', label: 'Ventas diarias', href: '/ventas' },
+    { icon: '📊', label: 'Control de ventas', href: '/control-ventas' },
     { icon: '📦', label: 'Inventario', href: '/inventario' },
     { icon: '💳', label: 'Finanzas', href: '/finanzas' },
-    { icon: '📊', label: 'Reportes', href: '/reportes' },
-    { icon: '⚙️', label: 'Configuracion', href: '/configuracion' },
+    { icon: '📈', label: 'Reportes', href: '/reportes' },
+    { icon: '⚙️', label: 'Config', href: '/configuracion' },
   ]
 
   const cards = [
     { label: 'Ventas hoy', value: 'S/ 0', icon: '💰', color: 'text-green-400' },
     { label: 'Ingresos del mes', value: 'S/ 0', icon: '📈', color: 'text-blue-400' },
     { label: 'Citas hoy', value: '0', icon: '📅', color: 'text-purple-400' },
-    { label: 'Pacientes nuevos', value: '0', icon: '👤', color: 'text-orange-400' },
+    { label: 'Clientes nuevos', value: '0', icon: '👤', color: 'text-orange-400' },
   ]
 
   const accesos = [
-    { label: 'Nuevo paciente', href: '/pacientes', color: 'bg-blue-600 hover:bg-blue-700' },
+    { label: 'Nuevo cliente', href: '/pacientes', color: 'bg-blue-600 hover:bg-blue-700' },
     { label: 'Nueva cita', href: '/agenda', color: 'bg-purple-600 hover:bg-purple-700' },
     { label: 'Nueva venta', href: '/ventas', color: 'bg-green-600 hover:bg-green-700' },
     { label: 'Nueva consulta', href: '/consulta', color: 'bg-orange-600 hover:bg-orange-700' },
+    { label: 'Control ventas', href: '/control-ventas', color: 'bg-pink-600 hover:bg-pink-700' },
   ]
 
   const resumen = [
