@@ -16,13 +16,15 @@ export default function Login() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-      setError('Email o contraseña incorrectos: ' + error.message)
+      setError('Error: ' + error.message)
       setCargando(false)
       return
     }
 
     if (data.session) {
-      window.location.replace('/')
+      setTimeout(() => {
+        window.location.href = '/'
+      }, 500)
     }
   }
 
@@ -30,7 +32,7 @@ export default function Login() {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-blue-400">👁 OFTALMANAGER</h1>
+          <h1 className="text-3xl font-bold text-blue-400">👁️ OFTALMANAGER</h1>
           <p className="text-gray-400 mt-2">Sistema de gestion clinica</p>
         </div>
 
@@ -74,7 +76,15 @@ export default function Login() {
           >
             {cargando ? 'Iniciando sesion...' : 'Entrar'}
           </button>
+
+          <p className="text-center text-gray-500 text-xs mt-4">
+            Si olvidaste tu contraseña contacta al administrador
+          </p>
         </div>
+
+        <p className="text-center text-gray-600 text-xs mt-6">
+          OFTALMANAGER v1.0
+        </p>
       </div>
     </div>
   )
