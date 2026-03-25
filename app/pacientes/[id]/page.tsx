@@ -15,6 +15,8 @@ interface Paciente {
   ciudad: string
   direccion: string
   genero: string
+  encargado: string
+  status: string
 }
 
 export default function PerfilPaciente({ params }: { params: { id: string } }) {
@@ -66,17 +68,86 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   }
 
   const cargarCompras = async (id) => {
-    const { data } = await supabase
-      .from('ventas')
-      .select('*, ventas_detalle(*)')
-      .eq('paciente_id', id)
-      .order('created_at', { ascending: false })
+    const { data } = await supabase.from('ventas').select('*, ventas_detalle(*)').eq('paciente_id', id).order('created_at', { ascending: false })
     setCompras(data || [])
   }
 
   const cambiarEstadoVenta = async (ventaId, nuevoEstado) => {
     await supabase.from('ventas').update({ estado: nuevoEstado }).eq('id', ventaId)
     setCompras(compras.map(v => v.id === ventaId ? { ...v, estado: nuevoEstado } : v))
+  }
+
+  const escapeCSV = (val) => {
+    const str = String(val === null || val === undefined ? '' : val)
+    if (str.includes(';') || str.includes('"') || str.includes('\n')) return '"' + str.replace(/"/g, '""') + '"'
+    return str
+  }
+
+  const descargar = () => {
+    if (!paciente) return
+    let headers, rows, filename
+
+    if (tab === 'datos') {
+      headers = ['Campo', 'Valor']
+      rows = [
+        ['Nombres', paciente.nombres],
+        ['Apellidos', paciente.apellidos],
+        ['DNI/RUC', paciente.dni || ''],
+        ['Telefono', paciente.telefono || ''],
+        ['Email', paciente.email || ''],
+        ['Ciudad', paciente.ciudad || ''],
+        ['Direccion', paciente.direccion || ''],
+        ['Encargado', paciente.encargado || ''],
+        ['Status', paciente.status || ''],
+      ]
+      filename = 'datos-' + paciente.nombres + '.csv'
+    } else if (tab === 'historia') {
+      headers = ['Campo', 'Valor']
+      rows = [
+        ['Doctor', doctor],
+        ['Fecha', fecha],
+        ['Tipo prescripcion', tipoPrescripcion],
+        ['Razon consulta', razonConsulta],
+        ['Sintomatologia', sintomatologia],
+        ['Diagnostico', diagnostico],
+        ['Tratamiento', tratamiento],
+        ['Historia ocular', historiaOcular],
+        ['Historial familiar', historialFamiliar],
+        ['Comentarios', comentarios],
+        ['Antecedentes', antecedentes.join(', ')],
+        ['OD Lejos - Esferico', lejosOD.esferico],
+        ['OD Lejos - Cilindro', lejosOD.cilindro],
+        ['OD Lejos - Eje', lejosOD.eje],
+        ['OD Lejos - AV', lejosOD.av_cc],
+        ['OI Lejos - Esferico', lejosOI.esferico],
+        ['OI Lejos - Cilindro', lejosOI.cilindro],
+        ['OI Lejos - Eje', lejosOI.eje],
+        ['OI Lejos - AV', lejosOI.av_cc],
+      ]
+      filename = 'historia-' + paciente.nombres + '.csv'
+    } else if (tab === 'compras') {
+      headers = ['Fecha', 'Productos', 'Metodo pago', 'Total', 'Estado']
+      rows = compras.map(v => [
+        new Date(v.created_at).toLocaleDateString('es-PE'),
+        v.ventas_detalle?.map(d => d.cantidad + 'x ' + (d.nombre_producto || 'Producto')).join(' | ') || '',
+        v.metodo_pago || '',
+        v.total || 0,
+        v.estado || ''
+      ])
+      filename = 'compras-' + paciente.nombres + '.csv'
+    } else {
+      headers = ['Historial de citas']
+      rows = [['Sin citas registradas']]
+      filename = 'citas-' + paciente.nombres + '.csv'
+    }
+
+    const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
   }
 
   const InputCampo = ({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) => (
@@ -140,10 +211,15 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     <div className="flex h-screen bg-gray-950 text-white">
       <Sidebar />
       <div className="flex-1 overflow-auto">
-        <div className="border-b border-gray-800 px-8 py-4 flex items-center gap-4">
-          <a href="/pacientes" className="text-gray-400 hover:text-white text-sm">← Clientes</a>
-          <span className="text-gray-600">/</span>
-          <h2 className="text-lg font-semibold">{paciente.nombres} {paciente.apellidos}</h2>
+        <div className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <a href="/pacientes" className="text-gray-400 hover:text-white text-sm">← Clientes</a>
+            <span className="text-gray-600">/</span>
+            <h2 className="text-lg font-semibold">{paciente.nombres} {paciente.apellidos}</h2>
+          </div>
+          <button onClick={descargar} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
+            ⬇ Descargar {tab === 'datos' ? 'datos' : tab === 'historia' ? 'historia' : tab === 'compras' ? 'compras' : 'citas'}
+          </button>
         </div>
 
         <div className="p-8">
@@ -303,9 +379,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                   <tbody>
                     {compras.map((v) => (
                       <tr key={v.id} className="border-b border-gray-800 hover:bg-gray-800">
-                        <td className="px-6 py-4 text-sm text-gray-300">
-                          {new Date(v.created_at).toLocaleDateString('es-PE')}
-                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-300">{new Date(v.created_at).toLocaleDateString('es-PE')}</td>
                         <td className="px-6 py-4">
                           {v.ventas_detalle && v.ventas_detalle.length > 0 ? (
                             <div className="space-y-1">
