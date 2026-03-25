@@ -15,7 +15,7 @@ export default function Pacientes() {
   const [mostrar, setMostrar] = useState(false)
   const [cargando, setCargando] = useState(true)
   const [nuevo, setNuevo] = useState({
-    nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', genero: '', encargado: '', status: 'verde'
+    nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', encargado: '', status: 'verde'
   })
 
   useEffect(() => { cargarPacientes() }, [])
@@ -31,7 +31,7 @@ export default function Pacientes() {
     if (!nuevo.nombres || !nuevo.apellidos) { alert('Nombres y apellidos son obligatorios'); return }
     const { error } = await supabase.from('pacientes').insert([nuevo])
     if (error) { alert('Error: ' + error.message) }
-    else { alert('Cliente guardado'); setMostrar(false); setNuevo({ nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', genero: '', encargado: '', status: 'verde' }); cargarPacientes() }
+    else { alert('Cliente guardado'); setMostrar(false); setNuevo({ nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', encargado: '', status: 'verde' }); cargarPacientes() }
   }
 
   const cambiarStatus = async (id, status) => {
@@ -45,6 +45,29 @@ export default function Pacientes() {
     (p.telefono || '').includes(busqueda)
   )
 
+  const escapeCSV = (val) => {
+    const str = String(val === null || val === undefined ? '' : val)
+    if (str.includes(';') || str.includes('"') || str.includes('\n')) {
+      return '"' + str.replace(/"/g, '""') + '"'
+    }
+    return str
+  }
+
+  const descargarCSV = () => {
+    const headers = ['Nombres','Apellidos','DNI/RUC','Telefono','Email','Ciudad','Direccion','Encargado','Status']
+    const rows = filtrados.map(p => [
+      p.nombres || '', p.apellidos || '', p.dni || '', p.telefono || '',
+      p.email || '', p.ciudad || '', p.direccion || '', p.encargado || '', p.status || ''
+    ])
+    const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'clientes.csv'
+    a.click()
+  }
+
   return (
     <div className="flex h-screen bg-gray-950 text-white">
       <Sidebar />
@@ -54,7 +77,14 @@ export default function Pacientes() {
             <h2 className="text-lg font-semibold">Clientes (pacientes)</h2>
             <p className="text-sm text-gray-400">{filtrados.length} clientes encontrados</p>
           </div>
-          <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nuevo cliente</button>
+          <div className="flex gap-3">
+            <button onClick={descargarCSV} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
+              ⬇ Descargar
+            </button>
+            <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
+              + Nuevo cliente
+            </button>
+          </div>
         </div>
 
         <div className="p-8">
@@ -101,7 +131,6 @@ export default function Pacientes() {
                         </td>
                         <td className="px-6 py-4">
                           <a href={'/pacientes/' + p.id} className="text-blue-400 hover:text-blue-300 text-sm mr-3">Ver</a>
-                          <button className="text-gray-400 hover:text-gray-300 text-sm">Editar</button>
                         </td>
                       </tr>
                     ))
