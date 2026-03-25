@@ -18,6 +18,7 @@ const especialidades = ['Refraccion', 'Catarata', 'Glaucoma', 'Retina', 'Contact
 export default function Agenda() {
   const [citas, setCitas] = useState([])
   const [clientes, setClientes] = useState([])
+  const [doctores, setDoctores] = useState([])
   const [cargando, setCargando] = useState(true)
   const [mostrar, setMostrar] = useState(false)
   const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false)
@@ -26,9 +27,6 @@ export default function Agenda() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null)
   const [busquedaCliente, setBusquedaCliente] = useState('')
   const [mostrarClientes, setMostrarClientes] = useState(false)
-  const [doctorSeleccionado, setDoctorSeleccionado] = useState(null)
-  const [busquedaDoctor, setBusquedaDoctor] = useState('')
-  const [mostrarDoctores, setMostrarDoctores] = useState(false)
   const [especialidadOtro, setEspecialidadOtro] = useState(false)
   const [nueva, setNueva] = useState({ doctor: '', especialidad: '', fecha: '', hora: '', duracion: 30, notas: '' })
   const [nuevoCliente, setNuevoCliente] = useState({ nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', encargado: '', status: 'verde' })
@@ -43,18 +41,26 @@ export default function Agenda() {
       .order('fecha', { ascending: true })
       .order('hora', { ascending: true })
     setCitas(citasData || [])
-    const { data: clientesData } = await supabase.from('pacientes').select('id, nombres, apellidos, telefono, dni, ciudad').order('nombres')
+
+    const { data: clientesData } = await supabase
+      .from('pacientes')
+      .select('id, nombres, apellidos, telefono, dni, ciudad')
+      .order('nombres')
     setClientes(clientesData || [])
+
+    const { data: doctoresData } = await supabase
+      .from('doctores')
+      .select('*')
+      .eq('activo', true)
+      .order('nombres')
+    setDoctores(doctoresData || [])
+
     setCargando(false)
   }
 
   const clientesFiltrados = clientes.filter(c =>
     (c.nombres + ' ' + c.apellidos).toLowerCase().includes(busquedaCliente.toLowerCase()) ||
     (c.dni || '').includes(busquedaCliente)
-  )
-
-  const doctoresFiltrados = clientes.filter(c =>
-    (c.nombres + ' ' + c.apellidos).toLowerCase().includes(busquedaDoctor.toLowerCase())
   )
 
   const cambiarEstado = async (id, estado) => {
@@ -80,7 +86,7 @@ export default function Agenda() {
   }
 
   const guardarCita = async () => {
-    if (!nueva.doctor) { alert('Selecciona o ingresa el doctor'); return }
+    if (!nueva.doctor) { alert('Selecciona un doctor'); return }
     if (!nueva.fecha) { alert('Ingresa la fecha'); return }
     if (!nueva.hora) { alert('Ingresa la hora'); return }
 
@@ -102,9 +108,8 @@ export default function Agenda() {
     setMostrar(false)
     setNueva({ doctor: '', especialidad: '', fecha: '', hora: '', duracion: 30, notas: '' })
     setClienteSeleccionado(null)
-    setDoctorSeleccionado(null)
     setBusquedaCliente('')
-    setBusquedaDoctor('')
+    setEspecialidadOtro(false)
   }
 
   const doctoresUnicos = [...new Set(citas.map(c => c.doctor).filter(Boolean))]
@@ -244,34 +249,23 @@ export default function Agenda() {
 
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">Doctor / Optometra</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Buscar doctor por nombre..."
-                    value={doctorSeleccionado ? doctorSeleccionado.nombres + ' ' + doctorSeleccionado.apellidos : busquedaDoctor}
-                    onChange={(e) => { setBusquedaDoctor(e.target.value); setDoctorSeleccionado(null); setMostrarDoctores(true); setNueva({...nueva, doctor: e.target.value}) }}
-                    onFocus={() => setMostrarDoctores(true)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                  />
-                  {mostrarDoctores && busquedaDoctor && (
-                    <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 z-10 max-h-40 overflow-auto">
-                      {doctoresFiltrados.slice(0, 5).map(c => (
-                        <button key={c.id} onClick={() => { setDoctorSeleccionado(c); setBusquedaDoctor(''); setMostrarDoctores(false); setNueva({...nueva, doctor: c.nombres + ' ' + c.apellidos}) }} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm">
-                          <p>{c.nombres} {c.apellidos}</p>
-                          <p className="text-xs text-gray-400">{c.dni || '-'}</p>
-                        </button>
-                      ))}
-                      <button onClick={() => { setNueva({...nueva, doctor: busquedaDoctor}); setMostrarDoctores(false) }} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs text-blue-400 border-t border-gray-700">
-                        + Usar "{busquedaDoctor}" como doctor
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {doctorSeleccionado && (
-                  <div className="mt-1 bg-green-900 rounded px-2 py-1 flex justify-between items-center">
-                    <p className="text-xs text-green-300">{doctorSeleccionado.nombres} {doctorSeleccionado.apellidos}</p>
-                    <button onClick={() => { setDoctorSeleccionado(null); setNueva({...nueva, doctor: ''}) }} className="text-green-400 text-xs">X</button>
+                {doctores.length === 0 ? (
+                  <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-400">
+                    No hay doctores registrados. Ve a <a href="/configuracion" className="text-blue-400 hover:text-blue-300">Configuracion</a> para agregar doctores.
                   </div>
+                ) : (
+                  <select
+                    value={nueva.doctor}
+                    onChange={(e) => setNueva({...nueva, doctor: e.target.value})}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">Seleccionar doctor...</option>
+                    {doctores.map(d => (
+                      <option key={d.id} value={d.nombres + ' ' + d.apellidos}>
+                        {d.nombres} {d.apellidos} {d.especialidad ? '— ' + d.especialidad : ''}
+                      </option>
+                    ))}
+                  </select>
                 )}
               </div>
 
