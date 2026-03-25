@@ -365,11 +365,7 @@ export default function Finanzas() {
                         <input type="date" value={p.fecha_vencimiento || ''} onChange={(e) => editarPagar(p.id, 'fecha_vencimiento', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none border-b border-gray-700 focus:border-blue-500" />
                       </td>
                       <td className="px-4 py-3">
-                        <select
-                          value={p.estado}
-                          onChange={(e) => editarPagar(p.id, 'estado', e.target.value)}
-                          className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusPagarColors[p.estado]}
-                        >
+                        <select value={p.estado} onChange={(e) => editarPagar(p.id, 'estado', e.target.value)} className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusPagarColors[p.estado]}>
                           <option value="pendiente">Pendiente</option>
                           <option value="parcial">Parcial</option>
                           <option value="pagado">Pagado</option>
@@ -448,7 +444,7 @@ export default function Finanzas() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Tipo</label>
-                  <input type="text" placeholder="ej: laboratorio, monturas..." onChange={(e) => setNuevoPagar({...nuevoPagar, tipoProveedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" placeholder="ej: laboratorio, monturas, alquiler..." onChange={(e) => setNuevoPagar({...nuevoPagar, tipoProveedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
