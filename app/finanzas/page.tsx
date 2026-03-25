@@ -26,7 +26,7 @@ export default function Finanzas() {
   const [filtroPagar, setFiltroPagar] = useState({ proveedor: '', tipo: '', producto: '', estado: '' })
   const [nuevoMov, setNuevoMov] = useState({ cliente: '', concepto: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
   const [nuevoPagar, setNuevoPagar] = useState({
-    proveedor: '', tipoProveedor: 'laboratorio', fecha_venta: '',
+    proveedor: '', tipoProveedor: '', fecha_venta: '',
     producto: '', total: 0, pagado: 0, pendiente: 0, fecha_vencimiento: '', estado: 'pendiente'
   })
 
@@ -56,7 +56,7 @@ export default function Finanzas() {
 
   const pagarFiltrados = pagar.filter(p =>
     (filtroPagar.proveedor === '' || (p.proveedor || '').toLowerCase().includes(filtroPagar.proveedor.toLowerCase())) &&
-    (filtroPagar.tipo === '' || p.tipoProveedor === filtroPagar.tipo) &&
+    (filtroPagar.tipo === '' || (p.tipoProveedor || '').toLowerCase().includes(filtroPagar.tipo.toLowerCase())) &&
     (filtroPagar.producto === '' || (p.producto || '').toLowerCase().includes(filtroPagar.producto.toLowerCase())) &&
     (filtroPagar.estado === '' || p.estado === filtroPagar.estado)
   )
@@ -86,7 +86,7 @@ export default function Finanzas() {
     const pendiente = nuevoPagar.total - nuevoPagar.pagado
     setPagar([...pagar, { ...nuevoPagar, id: pagar.length + 1, pendiente }])
     setMostrarPagar(false)
-    setNuevoPagar({ proveedor: '', tipoProveedor: 'laboratorio', fecha_venta: '', producto: '', total: 0, pagado: 0, pendiente: 0, fecha_vencimiento: '', estado: 'pendiente' })
+    setNuevoPagar({ proveedor: '', tipoProveedor: '', fecha_venta: '', producto: '', total: 0, pagado: 0, pendiente: 0, fecha_vencimiento: '', estado: 'pendiente' })
   }
 
   const editarPagar = (id, campo, valor) => {
@@ -222,15 +222,7 @@ export default function Finanzas() {
           {mostrarFiltros && tab === 'pagar' && (
             <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 mb-4 grid grid-cols-4 gap-3">
               <input placeholder="Proveedor..." value={filtroPagar.proveedor} onChange={(e) => setFiltroPagar({...filtroPagar, proveedor: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
-              <select value={filtroPagar.tipo} onChange={(e) => setFiltroPagar({...filtroPagar, tipo: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
-                <option value="">Todos los tipos</option>
-                <option value="laboratorio">Laboratorio</option>
-                <option value="monturas">Monturas</option>
-                <option value="equipos">Equipos</option>
-                <option value="servicios">Servicios</option>
-                <option value="marketing">Marketing</option>
-                <option value="alquiler">Alquiler</option>
-              </select>
+              <input placeholder="Tipo..." value={filtroPagar.tipo} onChange={(e) => setFiltroPagar({...filtroPagar, tipo: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
               <input placeholder="Producto..." value={filtroPagar.producto} onChange={(e) => setFiltroPagar({...filtroPagar, producto: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
               <select value={filtroPagar.estado} onChange={(e) => setFiltroPagar({...filtroPagar, estado: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
                 <option value="">Todos los estados</option>
@@ -348,9 +340,15 @@ export default function Finanzas() {
                     <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400 text-sm">No hay cuentas por pagar registradas</td></tr>
                   ) : pagarFiltrados.map((p) => (
                     <tr key={p.id} className="border-b border-gray-800 hover:bg-gray-800">
-                      <td className="px-4 py-3 text-sm font-medium">{p.proveedor}</td>
-                      <td className="px-4 py-3 text-sm text-gray-300 capitalize">{p.tipoProveedor}</td>
-                      <td className="px-4 py-3 text-sm text-gray-300">{p.fecha_venta || '-'}</td>
+                      <td className="px-4 py-3">
+                        <input value={p.proveedor || ''} onChange={(e) => editarPagar(p.id, 'proveedor', e.target.value)} className="bg-transparent text-white text-sm w-full focus:outline-none border-b border-gray-700 focus:border-blue-500 min-w-28" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <input value={p.tipoProveedor || ''} onChange={(e) => editarPagar(p.id, 'tipoProveedor', e.target.value)} className="bg-transparent text-white text-sm w-full focus:outline-none border-b border-gray-700 focus:border-blue-500 min-w-24" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <input type="date" value={p.fecha_venta || ''} onChange={(e) => editarPagar(p.id, 'fecha_venta', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none border-b border-gray-700 focus:border-blue-500" />
+                      </td>
                       <td className="px-4 py-3">
                         <input value={p.producto || ''} onChange={(e) => editarPagar(p.id, 'producto', e.target.value)} className="bg-transparent text-white text-sm w-full focus:outline-none border-b border-gray-700 focus:border-blue-500 min-w-32" />
                       </td>
@@ -363,7 +361,9 @@ export default function Finanzas() {
                       <td className="px-4 py-3">
                         <input type="number" value={p.pendiente || 0} onChange={(e) => editarPagar(p.id, 'pendiente', Number(e.target.value))} className="bg-transparent text-yellow-400 text-sm w-20 focus:outline-none border-b border-gray-700 focus:border-blue-500" />
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-400">{p.fecha_vencimiento}</td>
+                      <td className="px-4 py-3">
+                        <input type="date" value={p.fecha_vencimiento || ''} onChange={(e) => editarPagar(p.id, 'fecha_vencimiento', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none border-b border-gray-700 focus:border-blue-500" />
+                      </td>
                       <td className="px-4 py-3">
                         <select
                           value={p.estado}
@@ -447,15 +447,8 @@ export default function Finanzas() {
                   <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, proveedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Tipo de proveedor</label>
-                  <select onChange={(e) => setNuevoPagar({...nuevoPagar, tipoProveedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
-                    <option value="laboratorio">Laboratorio</option>
-                    <option value="monturas">Monturas</option>
-                    <option value="equipos">Equipos medicos</option>
-                    <option value="servicios">Servicios</option>
-                    <option value="marketing">Marketing</option>
-                    <option value="alquiler">Alquiler</option>
-                  </select>
+                  <label className="text-xs text-gray-400 mb-1 block">Tipo</label>
+                  <input type="text" placeholder="ej: laboratorio, monturas..." onChange={(e) => setNuevoPagar({...nuevoPagar, tipoProveedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
