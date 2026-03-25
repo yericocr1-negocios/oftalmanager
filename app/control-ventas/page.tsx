@@ -15,11 +15,15 @@ export default function ControlVentas() {
   const [ventas, setVentas] = useState([])
   const [clientes, setClientes] = useState([])
   const [cargando, setCargando] = useState(true)
-  const [filtroMes, setFiltroMes] = useState('todos')
-  const [busqueda, setBusqueda] = useState('')
+  const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [mostrarNueva, setMostrarNueva] = useState(false)
   const [busquedaCliente, setBusquedaCliente] = useState({})
   const [mostrarDropdown, setMostrarDropdown] = useState(null)
+  const [filtros, setFiltros] = useState({
+    mes: 'todos', cliente: '', ruc_dni: '', ciudad: '', vendedor: '',
+    monto: '', cantidad: '', facturado_por: '', fecha_venta: '',
+    guia_factura: '', comentarios: '', tipo_pago: '', status: ''
+  })
   const [nueva, setNueva] = useState({
     mes: 'Marzo', cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0,
     cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '',
@@ -30,15 +34,9 @@ export default function ControlVentas() {
 
   const cargarDatos = async () => {
     setCargando(true)
-    const { data: ventasData } = await supabase
-      .from('ventas_especializadas')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const { data: ventasData } = await supabase.from('ventas_especializadas').select('*').order('created_at', { ascending: false })
     setVentas(ventasData || [])
-    const { data: clientesData } = await supabase
-      .from('pacientes')
-      .select('id, nombres, apellidos, dni, ciudad')
-      .order('nombres')
+    const { data: clientesData } = await supabase.from('pacientes').select('id, nombres, apellidos, dni, ciudad').order('nombres')
     setClientes(clientesData || [])
     setCargando(false)
   }
@@ -49,17 +47,31 @@ export default function ControlVentas() {
   ).slice(0, 5)
 
   const filtradas = ventas.filter(v => {
-    const coincideBusqueda =
-      (v.cliente || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-      (v.ciudad || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-      (v.vendedor || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-      (v.ruc_dni || '').includes(busqueda)
-    const coincideMes = filtroMes === 'todos' || v.mes === filtroMes
-    return coincideBusqueda && coincideMes
+    return (
+      (filtros.mes === 'todos' || v.mes === filtros.mes) &&
+      (filtros.cliente === '' || (v.cliente || '').toLowerCase().includes(filtros.cliente.toLowerCase())) &&
+      (filtros.ruc_dni === '' || (v.ruc_dni || '').includes(filtros.ruc_dni)) &&
+      (filtros.ciudad === '' || (v.ciudad || '').toLowerCase().includes(filtros.ciudad.toLowerCase())) &&
+      (filtros.vendedor === '' || (v.vendedor || '').toLowerCase().includes(filtros.vendedor.toLowerCase())) &&
+      (filtros.monto === '' || String(v.monto || '').includes(filtros.monto)) &&
+      (filtros.cantidad === '' || String(v.cantidad || '').includes(filtros.cantidad)) &&
+      (filtros.facturado_por === '' || (v.facturado_por || '').toLowerCase().includes(filtros.facturado_por.toLowerCase())) &&
+      (filtros.fecha_venta === '' || (v.fecha_venta || '').includes(filtros.fecha_venta)) &&
+      (filtros.guia_factura === '' || (v.guia_factura || '').toLowerCase().includes(filtros.guia_factura.toLowerCase())) &&
+      (filtros.comentarios === '' || (v.comentarios || '').toLowerCase().includes(filtros.comentarios.toLowerCase())) &&
+      (filtros.tipo_pago === '' || v.tipo_pago === filtros.tipo_pago) &&
+      (filtros.status === '' || v.status === filtros.status)
+    )
   })
 
   const totalMonto = filtradas.reduce((sum, v) => sum + (v.monto || 0), 0)
   const totalCantidad = filtradas.reduce((sum, v) => sum + (v.cantidad || 0), 0)
+
+  const limpiarFiltros = () => setFiltros({
+    mes: 'todos', cliente: '', ruc_dni: '', ciudad: '', vendedor: '',
+    monto: '', cantidad: '', facturado_por: '', fecha_venta: '',
+    guia_factura: '', comentarios: '', tipo_pago: '', status: ''
+  })
 
   const editarCampo = async (id, campo, valor) => {
     setVentas(ventas.map(v => v.id === id ? { ...v, [campo]: valor } : v))
@@ -68,21 +80,14 @@ export default function ControlVentas() {
 
   const seleccionarCliente = (ventaId, cliente) => {
     const nombre = cliente.nombres + ' ' + cliente.apellidos
-    setVentas(ventas.map(v => v.id === ventaId ? {
-      ...v, cliente: nombre, ruc_dni: cliente.dni || '', ciudad: cliente.ciudad || ''
-    } : v))
-    supabase.from('ventas_especializadas').update({
-      cliente: nombre, ruc_dni: cliente.dni || '', ciudad: cliente.ciudad || ''
-    }).eq('id', ventaId)
+    setVentas(ventas.map(v => v.id === ventaId ? { ...v, cliente: nombre, ruc_dni: cliente.dni || '', ciudad: cliente.ciudad || '' } : v))
+    supabase.from('ventas_especializadas').update({ cliente: nombre, ruc_dni: cliente.dni || '', ciudad: cliente.ciudad || '' }).eq('id', ventaId)
     setMostrarDropdown(null)
     setBusquedaCliente({})
   }
 
   const guardarNueva = async () => {
-    const { data, error } = await supabase
-      .from('ventas_especializadas')
-      .insert([{ empresa_id: 'b2711600-fbf7-4f11-b699-8024e36c7cf5', ...nueva }])
-      .select().single()
+    const { data, error } = await supabase.from('ventas_especializadas').insert([{ empresa_id: 'b2711600-fbf7-4f11-b699-8024e36c7cf5', ...nueva }]).select().single()
     if (error) { alert('Error: ' + error.message); return }
     setVentas([data, ...ventas])
     setMostrarNueva(false)
@@ -91,9 +96,7 @@ export default function ControlVentas() {
 
   const escapeCSV = (val) => {
     const str = String(val === null || val === undefined ? '' : val)
-    if (str.includes(';') || str.includes('"') || str.includes('\n')) {
-      return '"' + str.replace(/"/g, '""') + '"'
-    }
+    if (str.includes(';') || str.includes('"') || str.includes('\n')) return '"' + str.replace(/"/g, '""') + '"'
     return str
   }
 
@@ -105,7 +108,8 @@ export default function ControlVentas() {
       v.guia_factura || '', v.comentarios || '', v.tipo_pago || '',
       v.num_cuotas || 0, v.fechas_pago || '', v.status || ''
     ])
-    const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
+    const totalRow = ['TOTAL', '', '', '', '', totalMonto, totalCantidad, '', '', '', '', '', '', '', '']
+    const csv = '\uFEFF' + [headers, ...rows, totalRow].map(r => r.map(escapeCSV).join(';')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -124,6 +128,9 @@ export default function ControlVentas() {
             <p className="text-sm text-gray-400">Total: S/ {totalMonto.toLocaleString()} — {totalCantidad} unidades</p>
           </div>
           <div className="flex gap-3">
+            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className={'px-4 py-2 rounded-lg text-sm ' + (mostrarFiltros ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white')}>
+              🔍 Filtrar
+            </button>
             <button onClick={descargarCSV} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
               ⬇ Descargar
             </button>
@@ -133,25 +140,43 @@ export default function ControlVentas() {
           </div>
         </div>
 
-        <div className="p-6">
-          <div className="flex gap-3 mb-4 flex-wrap">
-            <input
-              type="text"
-              placeholder="Buscar cliente, ciudad, vendedor, DNI..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-            />
-            <select
-              value={filtroMes}
-              onChange={(e) => setFiltroMes(e.target.value)}
-              className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-            >
-              <option value="todos">Todos los meses</option>
-              {meses.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
+        {mostrarFiltros && (
+          <div className="border-b border-gray-800 px-6 py-4 bg-gray-900">
+            <div className="grid grid-cols-7 gap-2 mb-2">
+              <select value={filtros.mes} onChange={(e) => setFiltros({...filtros, mes: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+                <option value="todos">Todos los meses</option>
+                {meses.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <input placeholder="Cliente..." value={filtros.cliente} onChange={(e) => setFiltros({...filtros, cliente: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
+              <input placeholder="RUC/DNI..." value={filtros.ruc_dni} onChange={(e) => setFiltros({...filtros, ruc_dni: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
+              <input placeholder="Ciudad..." value={filtros.ciudad} onChange={(e) => setFiltros({...filtros, ciudad: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
+              <input placeholder="Vendedor..." value={filtros.vendedor} onChange={(e) => setFiltros({...filtros, vendedor: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
+              <input placeholder="Monto..." value={filtros.monto} onChange={(e) => setFiltros({...filtros, monto: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
+              <input placeholder="Facturado por..." value={filtros.facturado_por} onChange={(e) => setFiltros({...filtros, facturado_por: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              <input type="date" value={filtros.fecha_venta} onChange={(e) => setFiltros({...filtros, fecha_venta: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
+              <input placeholder="Guia/Factura..." value={filtros.guia_factura} onChange={(e) => setFiltros({...filtros, guia_factura: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
+              <input placeholder="Comentarios..." value={filtros.comentarios} onChange={(e) => setFiltros({...filtros, comentarios: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500" />
+              <select value={filtros.tipo_pago} onChange={(e) => setFiltros({...filtros, tipo_pago: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+                <option value="">Tipo de pago</option>
+                <option value="directo">Directo</option>
+                <option value="credito">Credito</option>
+              </select>
+              <select value={filtros.status} onChange={(e) => setFiltros({...filtros, status: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+                <option value="">Todos los status</option>
+                <option value="verde">Verde</option>
+                <option value="naranja">Naranja</option>
+                <option value="rojo">Rojo</option>
+              </select>
+              <div className="col-span-2 flex justify-end">
+                <button onClick={limpiarFiltros} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-xs">Limpiar filtros</button>
+              </div>
+            </div>
           </div>
+        )}
 
+        <div className="p-6">
           {cargando ? (
             <div className="text-center text-gray-400 py-12">Cargando ventas...</div>
           ) : (
@@ -189,11 +214,7 @@ export default function ControlVentas() {
                       <td className="px-2 py-2 border border-gray-700 relative">
                         <input
                           value={busquedaCliente[v.id] !== undefined ? busquedaCliente[v.id] : (v.cliente || '')}
-                          onChange={(e) => {
-                            setBusquedaCliente({...busquedaCliente, [v.id]: e.target.value})
-                            editarCampo(v.id, 'cliente', e.target.value)
-                            setMostrarDropdown(v.id)
-                          }}
+                          onChange={(e) => { setBusquedaCliente({...busquedaCliente, [v.id]: e.target.value}); editarCampo(v.id, 'cliente', e.target.value); setMostrarDropdown(v.id) }}
                           onFocus={() => setMostrarDropdown(v.id)}
                           className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32"
                         />
@@ -250,11 +271,7 @@ export default function ControlVentas() {
                         <input value={v.fechas_pago || ''} onChange={(e) => editarCampo(v.id, 'fechas_pago', e.target.value)} placeholder="ej: 01/04, 01/05" className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32" />
                       </td>
                       <td className="px-2 py-2 border border-gray-700">
-                        <select
-                          value={v.status || 'verde'}
-                          onChange={(e) => editarCampo(v.id, 'status', e.target.value)}
-                          className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusColors[v.status || 'verde']}
-                        >
+                        <select value={v.status || 'verde'} onChange={(e) => editarCampo(v.id, 'status', e.target.value)} className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusColors[v.status || 'verde']}>
                           <option value="verde">Verde</option>
                           <option value="naranja">Naranja</option>
                           <option value="rojo">Rojo</option>
