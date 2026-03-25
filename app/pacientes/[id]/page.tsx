@@ -74,6 +74,11 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     setCompras(data || [])
   }
 
+  const cambiarEstadoVenta = async (ventaId, nuevoEstado) => {
+    await supabase.from('ventas').update({ estado: nuevoEstado }).eq('id', ventaId)
+    setCompras(compras.map(v => v.id === ventaId ? { ...v, estado: nuevoEstado } : v))
+  }
+
   const InputCampo = ({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) => (
     <input type="text" placeholder={label} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 text-center" />
   )
@@ -317,7 +322,16 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                         <td className="px-6 py-4 text-sm text-gray-300 capitalize">{v.metodo_pago || '-'}</td>
                         <td className="px-6 py-4 text-sm font-bold text-green-400">S/ {v.total}</td>
                         <td className="px-6 py-4">
-                          <span className="bg-green-900 text-green-400 text-xs px-2 py-1 rounded-full">{v.estado}</span>
+                          <select
+                            value={v.estado}
+                            onChange={(e) => cambiarEstadoVenta(v.id, e.target.value)}
+                            className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' +
+                              (v.estado === 'pagado' ? 'bg-green-600' : v.estado === 'anulado' ? 'bg-red-600' : 'bg-orange-500')}
+                          >
+                            <option value="pagado">Pagado</option>
+                            <option value="pendiente">Pendiente</option>
+                            <option value="anulado">No pago</option>
+                          </select>
                         </td>
                       </tr>
                     ))}
