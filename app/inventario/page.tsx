@@ -3,11 +3,11 @@ import { useState } from 'react'
 import Sidebar from '../../components/Sidebar'
 
 const productosIniciales = [
-  { id: 1, codigo: 'MON-001', nombre: 'Montura Ray-Ban RB3025', categoria: 'Montura', familia: 'Lentes', modelo: 'RB3025', material: 'Metal', color: 'Dorado', talla: 'M', stock: 12, minimo: 5, costo: 180, precio: 350, margen: 94, unidad: 'unidad', codigoBarras: '7501234567890', codigoOSCE: '', detraccion: false, foto: '' },
-  { id: 2, codigo: 'MON-002', nombre: 'Montura Oakley OX8046', categoria: 'Montura', familia: 'Lentes', modelo: 'OX8046', material: 'Acetato', color: 'Negro', talla: 'L', stock: 3, minimo: 5, costo: 200, precio: 420, margen: 110, unidad: 'unidad', codigoBarras: '7501234567891', codigoOSCE: '', detraccion: false, foto: '' },
-  { id: 3, codigo: 'LUN-001', nombre: 'Luna Antireflex Simple', categoria: 'Luna', familia: 'Lunas', modelo: 'AR Simple', material: 'Policarbonato', color: 'Transparente', talla: 'Universal', stock: 25, minimo: 10, costo: 80, precio: 180, margen: 125, unidad: 'par', codigoBarras: '', codigoOSCE: '', detraccion: false, foto: '' },
-  { id: 4, codigo: 'LUN-002', nombre: 'Luna Antireflex Premium', categoria: 'Luna', familia: 'Lunas', modelo: 'AR Premium', material: 'Trivex', color: 'Transparente', talla: 'Universal', stock: 8, minimo: 10, costo: 120, precio: 280, margen: 133, unidad: 'par', codigoBarras: '', codigoOSCE: '', detraccion: false, foto: '' },
-  { id: 5, codigo: 'INS-001', nombre: 'Colirio Lubricante', categoria: 'Insumo', familia: 'Medicamentos', modelo: 'Lubricante', material: 'Liquido', color: '-', talla: '10ml', stock: 30, minimo: 15, costo: 15, precio: 35, margen: 133, unidad: 'frasco', codigoBarras: '', codigoOSCE: '', detraccion: false, foto: '' },
+  { id: 1, codigo: 'MON-001', nombre: 'Montura Ray-Ban RB3025', categoria: 'Montura', familia: 'Lentes', modelo: 'RB3025', material: 'Metal', color: 'Dorado', talla: 'M', stock: 12, minimo: 5, costo: 180, precio: 350, margen: 94, unidad: 'unidad', codigoBarras: '7501234567890', codigoOSCE: '', detraccion: false },
+  { id: 2, codigo: 'MON-002', nombre: 'Montura Oakley OX8046', categoria: 'Montura', familia: 'Lentes', modelo: 'OX8046', material: 'Acetato', color: 'Negro', talla: 'L', stock: 3, minimo: 5, costo: 200, precio: 420, margen: 110, unidad: 'unidad', codigoBarras: '7501234567891', codigoOSCE: '', detraccion: false },
+  { id: 3, codigo: 'LUN-001', nombre: 'Luna Antireflex Simple', categoria: 'Luna', familia: 'Lunas', modelo: 'AR Simple', material: 'Policarbonato', color: 'Transparente', talla: 'Universal', stock: 25, minimo: 10, costo: 80, precio: 180, margen: 125, unidad: 'par', codigoBarras: '', codigoOSCE: '', detraccion: false },
+  { id: 4, codigo: 'LUN-002', nombre: 'Luna Antireflex Premium', categoria: 'Luna', familia: 'Lunas', modelo: 'AR Premium', material: 'Trivex', color: 'Transparente', talla: 'Universal', stock: 8, minimo: 10, costo: 120, precio: 280, margen: 133, unidad: 'par', codigoBarras: '', codigoOSCE: '', detraccion: false },
+  { id: 5, codigo: 'INS-001', nombre: 'Colirio Lubricante', categoria: 'Insumo', familia: 'Medicamentos', modelo: 'Lubricante', material: 'Liquido', color: '-', talla: '10ml', stock: 30, minimo: 15, costo: 15, precio: 35, margen: 133, unidad: 'frasco', codigoBarras: '', codigoOSCE: '', detraccion: false },
 ]
 
 const categoriasIniciales = ['Montura', 'Luna', 'Insumo', 'Servicio', 'Cirugia', 'Medicamento']
@@ -24,7 +24,7 @@ export default function Inventario() {
   const [nuevoProducto, setNuevoProducto] = useState({
     codigo: '', nombre: '', categoria: '', familia: '', modelo: '', material: '',
     color: '', talla: '', stock: 0, minimo: 5, costo: 0, precio: 0, margen: 0,
-    unidad: 'unidad', codigoBarras: '', codigoOSCE: '', detraccion: false, foto: ''
+    unidad: 'unidad', codigoBarras: '', codigoOSCE: '', detraccion: false
   })
 
   const filtrados = productos.filter(p => {
@@ -37,6 +37,32 @@ export default function Inventario() {
     const margen = nuevoProducto.costo > 0 ? Math.round(((nuevoProducto.precio - nuevoProducto.costo) / nuevoProducto.costo) * 100) : 0
     setProductos([...productos, { ...nuevoProducto, id: productos.length + 1, margen }])
     setMostrarNuevo(false)
+  }
+
+  const escapeCSV = (val) => {
+    const str = String(val === null || val === undefined ? '' : val)
+    if (str.includes(';') || str.includes('"') || str.includes('\n')) return '"' + str.replace(/"/g, '""') + '"'
+    return str
+  }
+
+  const descargar = () => {
+    const headers = ['Codigo','Nombre','Categoria','Familia','Modelo','Material','Color','Talla','Stock','Minimo','Costo','Precio','Margen','Unidad','Codigo Barras','Codigo OSCE','Detraccion']
+    const rows = filtrados.map(p => [
+      p.codigo, p.nombre, p.categoria, p.familia, p.modelo, p.material,
+      p.color, p.talla, p.stock, p.minimo, p.costo, p.precio,
+      p.margen + '%', p.unidad, p.codigoBarras, p.codigoOSCE, p.detraccion ? 'Si' : 'No'
+    ])
+    const totalRow = ['', 'TOTAL PRODUCTOS: ' + filtrados.length, '', '', '', '', '', '',
+      filtrados.reduce((s, p) => s + p.stock, 0), '', '', '',
+      'Valor inventario: S/ ' + filtrados.reduce((s, p) => s + p.stock * p.costo, 0).toLocaleString()
+    ]
+    const csv = '\uFEFF' + [headers, ...rows, totalRow].map(r => r.map(escapeCSV).join(';')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'inventario.csv'
+    a.click()
   }
 
   if (productoSeleccionado) {
@@ -52,7 +78,6 @@ export default function Inventario() {
                 <div className="text-center">
                   <p className="text-4xl mb-2">📦</p>
                   <p className="text-xs text-gray-500">Sin foto</p>
-                  <button className="mt-2 text-xs text-blue-400 hover:text-blue-300">Subir foto</button>
                 </div>
               </div>
               <div className="flex-1">
@@ -103,7 +128,14 @@ export default function Inventario() {
             <h2 className="text-lg font-semibold">Inventario</h2>
             <p className="text-sm text-gray-400">{productos.length} productos registrados</p>
           </div>
-          <button onClick={() => setMostrarNuevo(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nuevo producto</button>
+          <div className="flex gap-3">
+            <button onClick={descargar} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
+              ⬇ Descargar
+            </button>
+            <button onClick={() => setMostrarNuevo(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
+              + Nuevo producto
+            </button>
+          </div>
         </div>
 
         <div className="p-8">
