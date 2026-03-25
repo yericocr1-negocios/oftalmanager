@@ -24,6 +24,8 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   const [tab, setTab] = useState('datos')
   const [cargando, setCargando] = useState(true)
   const [compras, setCompras] = useState([])
+  const [citas, setCitas] = useState([])
+  const [menuAbierto, setMenuAbierto] = useState(false)
   const [doctor, setDoctor] = useState('')
   const [fecha, setFecha] = useState('')
   const [tipoPrescripcion, setTipoPrescripcion] = useState('')
@@ -58,6 +60,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     const id = window.location.pathname.split('/').pop()
     cargarPaciente(id)
     cargarCompras(id)
+    cargarCitas(id)
   }, [])
 
   const cargarPaciente = async (id) => {
@@ -68,8 +71,21 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   }
 
   const cargarCompras = async (id) => {
-    const { data } = await supabase.from('ventas').select('*, ventas_detalle(*)').eq('paciente_id', id).order('created_at', { ascending: false })
+    const { data } = await supabase
+      .from('ventas')
+      .select('*, ventas_detalle(*)')
+      .eq('paciente_id', id)
+      .order('created_at', { ascending: false })
     setCompras(data || [])
+  }
+
+  const cargarCitas = async (id) => {
+    const { data } = await supabase
+      .from('citas')
+      .select('*')
+      .eq('paciente_id', id)
+      .order('fecha', { ascending: false })
+    setCitas(data || [])
   }
 
   const cambiarEstadoVenta = async (ventaId, nuevoEstado) => {
@@ -136,8 +152,8 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
       ])
       filename = 'compras-' + paciente.nombres + '.csv'
     } else {
-      headers = ['Historial de citas']
-      rows = [['Sin citas registradas']]
+      headers = ['Fecha', 'Hora', 'Doctor', 'Especialidad', 'Estado']
+      rows = citas.map(c => [c.fecha || '', c.hora?.slice(0,5) || '', c.doctor || '', c.especialidad || '', c.estado || ''])
       filename = 'citas-' + paciente.nombres + '.csv'
     }
 
@@ -209,41 +225,42 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
-      <Sidebar />
+      <Sidebar menuAbierto={menuAbierto} setMenuAbierto={setMenuAbierto} />
       <div className="flex-1 overflow-auto">
-        <div className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="border-b border-gray-800 px-4 md:px-8 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setMenuAbierto(!menuAbierto)} className="md:hidden text-gray-400 hover:text-white">☰</button>
             <a href="/pacientes" className="text-gray-400 hover:text-white text-sm">← Clientes</a>
             <span className="text-gray-600">/</span>
-            <h2 className="text-lg font-semibold">{paciente.nombres} {paciente.apellidos}</h2>
+            <h2 className="text-sm md:text-lg font-semibold truncate">{paciente.nombres} {paciente.apellidos}</h2>
           </div>
-          <button onClick={descargar} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
-            ⬇ Descargar {tab === 'datos' ? 'datos' : tab === 'historia' ? 'historia' : tab === 'compras' ? 'compras' : 'citas'}
+          <button onClick={descargar} className="bg-gray-700 hover:bg-gray-600 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">
+            ⬇ Descargar
           </button>
         </div>
 
-        <div className="p-8">
-          <div className="flex items-center gap-6 mb-8 bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <div className="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center text-3xl font-bold">
+        <div className="p-4 md:p-8">
+          <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8 bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+            <div className="w-14 h-14 md:w-20 md:h-20 rounded-full bg-blue-600 flex items-center justify-center text-2xl md:text-3xl font-bold flex-shrink-0">
               {paciente.nombres[0]}
             </div>
-            <div className="flex-1">
-              <h3 className="text-2xl font-bold">{paciente.nombres} {paciente.apellidos}</h3>
-              <div className="flex gap-6 mt-2">
-                <p className="text-sm text-gray-400">DNI: <span className="text-white">{paciente.dni || '-'}</span></p>
-                <p className="text-sm text-gray-400">Tel: <span className="text-white">{paciente.telefono || '-'}</span></p>
-                <p className="text-sm text-gray-400">Ciudad: <span className="text-white">{paciente.ciudad || '-'}</span></p>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg md:text-2xl font-bold truncate">{paciente.nombres} {paciente.apellidos}</h3>
+              <div className="flex flex-wrap gap-3 md:gap-6 mt-2">
+                <p className="text-xs md:text-sm text-gray-400">DNI: <span className="text-white">{paciente.dni || '-'}</span></p>
+                <p className="text-xs md:text-sm text-gray-400">Tel: <span className="text-white">{paciente.telefono || '-'}</span></p>
+                <p className="text-xs md:text-sm text-gray-400 hidden md:block">Ciudad: <span className="text-white">{paciente.ciudad || '-'}</span></p>
               </div>
             </div>
-            <a href="/consulta" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+            <a href="/consulta" className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium flex-shrink-0">
               Nueva consulta
             </a>
           </div>
 
-          <div className="flex gap-3 mb-6">
+          <div className="flex gap-2 md:gap-3 mb-6 flex-wrap">
             {['datos', 'historia', 'compras', 'citas'].map((t) => (
-              <button key={t} onClick={() => setTab(t)} className={'px-4 py-2 rounded-lg text-sm transition-all ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
-                {t === 'datos' ? 'Datos' : t === 'historia' ? 'Historia Clinica' : t === 'compras' ? 'Compras' : 'Citas'}
+              <button key={t} onClick={() => setTab(t)} className={'px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm transition-all ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
+                {t === 'datos' ? 'Datos' : t === 'historia' ? 'Historia' : t === 'compras' ? 'Compras' : 'Citas'}
               </button>
             ))}
           </div>
@@ -251,7 +268,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
           {tab === 'datos' && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
               <h3 className="font-semibold mb-6">Datos personales</h3>
-              <div className="grid grid-cols-2 gap-6 max-w-2xl">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 max-w-2xl">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Nombres</label>
                   <input type="text" defaultValue={paciente.nombres} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -276,7 +293,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                   <label className="text-xs text-gray-400 mb-1 block">Ciudad</label>
                   <input type="text" defaultValue={paciente.ciudad || ''} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1 md:col-span-2">
                   <label className="text-xs text-gray-400 mb-1 block">Direccion</label>
                   <input type="text" defaultValue={paciente.direccion || ''} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
@@ -289,7 +306,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
             <div className="space-y-6">
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                 <h3 className="font-semibold mb-4">Informacion general</h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Doctor / Optometra</label>
                     <input type="text" value={doctor} onChange={(e) => setDoctor(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -371,7 +388,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                     <tr className="border-b border-gray-800">
                       <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Fecha</th>
                       <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Productos</th>
-                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Metodo pago</th>
+                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase hidden md:table-cell">Metodo</th>
                       <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Total</th>
                       <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Estado</th>
                     </tr>
@@ -393,7 +410,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                             <span className="text-gray-500 text-xs">{v.notas || '-'}</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-300 capitalize">{v.metodo_pago || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-300 capitalize hidden md:table-cell">{v.metodo_pago || '-'}</td>
                         <td className="px-6 py-4 text-sm font-bold text-green-400">S/ {v.total}</td>
                         <td className="px-6 py-4">
                           <select
@@ -416,12 +433,47 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
           )}
 
           {tab === 'citas' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <h3 className="font-semibold mb-6">Historial de citas</h3>
-              <div className="text-center text-gray-400 py-12">
-                <p className="text-4xl mb-4">📅</p>
-                <p>No hay citas registradas aun</p>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
+                <h3 className="font-semibold">Historial de citas</h3>
+                <span className="text-sm text-gray-400">{citas.length} citas</span>
               </div>
+              {citas.length === 0 ? (
+                <div className="text-center text-gray-400 py-12">
+                  <p className="text-4xl mb-4">📅</p>
+                  <p>No hay citas registradas aun</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-800">
+                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Fecha</th>
+                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Hora</th>
+                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Doctor</th>
+                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase hidden md:table-cell">Especialidad</th>
+                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {citas.map((c) => (
+                      <tr key={c.id} className="border-b border-gray-800 hover:bg-gray-800">
+                        <td className="px-6 py-4 text-sm text-gray-300">{c.fecha}</td>
+                        <td className="px-6 py-4 text-sm text-gray-300">{c.hora?.slice(0,5)}</td>
+                        <td className="px-6 py-4 text-sm font-medium">{c.doctor || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-300 hidden md:table-cell">{c.especialidad || '-'}</td>
+                        <td className="px-6 py-4">
+                          <span className={'text-xs px-2 py-1 rounded-full ' + (
+                            c.estado === 'confirmada' ? 'bg-green-900 text-green-400' :
+                            c.estado === 'en_atencion' ? 'bg-orange-900 text-orange-400' :
+                            c.estado === 'no_vino' ? 'bg-red-900 text-red-400' :
+                            'bg-blue-900 text-blue-400'
+                          )}>{c.estado}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
         </div>
