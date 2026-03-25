@@ -5,6 +5,13 @@ import { supabase } from '../../lib/supabase'
 
 const SEDE_ID = 'd976f6cb-01f1-4962-a728-1a1012ffc305'
 
+const statusPagarColors = {
+  pendiente: 'bg-yellow-600',
+  parcial: 'bg-blue-600',
+  pagado: 'bg-green-600',
+  vencido: 'bg-red-600',
+}
+
 export default function Finanzas() {
   const [tab, setTab] = useState('caja')
   const [movimientos, setMovimientos] = useState([])
@@ -20,7 +27,7 @@ export default function Finanzas() {
   const [nuevoMov, setNuevoMov] = useState({ cliente: '', concepto: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
   const [nuevoPagar, setNuevoPagar] = useState({
     proveedor: '', tipoProveedor: 'laboratorio', fecha_venta: '',
-    producto: '', total: 0, pagado: 0, fecha_vencimiento: '', estado: 'pendiente', numeroFactura: ''
+    producto: '', total: 0, pagado: 0, pendiente: 0, fecha_vencimiento: '', estado: 'pendiente'
   })
 
   useEffect(() => { cargarDatos() }, [])
@@ -57,7 +64,6 @@ export default function Finanzas() {
   const ingresos = movimientos.filter(m => m.tipo === 'ingreso').reduce((sum, m) => sum + m.monto, 0)
   const egresos = movimientos.filter(m => m.tipo === 'egreso').reduce((sum, m) => sum + m.monto, 0)
   const totalCuotasPendientes = cuotas.filter(c => c.estado === 'pendiente').reduce((sum, c) => sum + c.monto, 0)
-  const totalPagar = pagar.reduce((sum, p) => sum + (p.total - p.pagado), 0)
 
   const guardarMov = async () => {
     const { error } = await supabase.from('caja').insert([{
@@ -77,13 +83,21 @@ export default function Finanzas() {
   }
 
   const guardarPagar = () => {
-    setPagar([...pagar, { ...nuevoPagar, id: pagar.length + 1, pendiente: nuevoPagar.total - nuevoPagar.pagado }])
+    const pendiente = nuevoPagar.total - nuevoPagar.pagado
+    setPagar([...pagar, { ...nuevoPagar, id: pagar.length + 1, pendiente }])
     setMostrarPagar(false)
-    setNuevoPagar({ proveedor: '', tipoProveedor: 'laboratorio', fecha_venta: '', producto: '', total: 0, pagado: 0, fecha_vencimiento: '', estado: 'pendiente', numeroFactura: '' })
+    setNuevoPagar({ proveedor: '', tipoProveedor: 'laboratorio', fecha_venta: '', producto: '', total: 0, pagado: 0, pendiente: 0, fecha_vencimiento: '', estado: 'pendiente' })
   }
 
   const editarPagar = (id, campo, valor) => {
-    setPagar(pagar.map(p => p.id === id ? { ...p, [campo]: valor } : p))
+    setPagar(pagar.map(p => {
+      if (p.id !== id) return p
+      const updated = { ...p, [campo]: valor }
+      if (campo === 'total' || campo === 'pagado') {
+        updated.pendiente = (campo === 'total' ? Number(valor) : p.total) - (campo === 'pagado' ? Number(valor) : p.pagado)
+      }
+      return updated
+    }))
   }
 
   const escapeCSV = (val) => {
@@ -111,7 +125,7 @@ export default function Finanzas() {
       filename = 'cuotas.csv'
     } else {
       headers = ['Proveedor', 'Tipo', 'Fecha venta', 'Producto', 'Total', 'Pagado', 'Pendiente', 'Vence', 'Estado']
-      rows = pagarFiltrados.map(p => [p.proveedor || '', p.tipoProveedor || '', p.fecha_venta || '', p.producto || '', p.total || 0, p.pagado || 0, (p.total - p.pagado) || 0, p.fecha_vencimiento || '', p.estado || ''])
+      rows = pagarFiltrados.map(p => [p.proveedor || '', p.tipoProveedor || '', p.fecha_venta || '', p.producto || '', p.total || 0, p.pagado || 0, p.pendiente || 0, p.fecha_vencimiento || '', p.estado || ''])
       filename = 'cuentas-pagar.csv'
     }
     const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
@@ -122,9 +136,6 @@ export default function Finanzas() {
     a.download = filename
     a.click()
   }
-
-  const estadoColorCuota = { pendiente: 'bg-yellow-900 text-yellow-400', pagado: 'bg-green-900 text-green-400' }
-  const estadoColorPagar = { pendiente: 'bg-yellow-900 text-yellow-400', pagado: 'bg-green-900 text-green-400', vencido: 'bg-red-900 text-red-400', parcial: 'bg-blue-900 text-blue-400' }
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
@@ -302,7 +313,7 @@ export default function Finanzas() {
                       <td className="px-4 py-3 text-sm font-bold text-blue-400">S/ {c.monto}</td>
                       <td className="px-4 py-3 text-sm text-gray-300">{c.fecha_vencimiento}</td>
                       <td className="px-4 py-3">
-                        <span className={'text-xs px-2 py-1 rounded-full ' + estadoColorCuota[c.estado]}>{c.estado}</span>
+                        <span className={'text-xs px-2 py-1 rounded-full ' + (c.estado === 'pagado' ? 'bg-green-900 text-green-400' : 'bg-yellow-900 text-yellow-400')}>{c.estado}</span>
                       </td>
                       <td className="px-4 py-3">
                         {c.estado !== 'pagado' && (
@@ -341,21 +352,23 @@ export default function Finanzas() {
                       <td className="px-4 py-3 text-sm text-gray-300 capitalize">{p.tipoProveedor}</td>
                       <td className="px-4 py-3 text-sm text-gray-300">{p.fecha_venta || '-'}</td>
                       <td className="px-4 py-3">
-                        <input value={p.producto || ''} onChange={(e) => editarPagar(p.id, 'producto', e.target.value)} className="bg-transparent text-white text-sm w-full focus:outline-none border-b border-gray-700 focus:border-blue-500" />
+                        <input value={p.producto || ''} onChange={(e) => editarPagar(p.id, 'producto', e.target.value)} className="bg-transparent text-white text-sm w-full focus:outline-none border-b border-gray-700 focus:border-blue-500 min-w-32" />
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium">S/ {p.total}</td>
-                      <td className="px-4 py-3 text-sm text-green-400">S/ {p.pagado}</td>
-                      <td className="px-4 py-3 text-sm text-yellow-400">S/ {p.total - p.pagado}</td>
+                      <td className="px-4 py-3">
+                        <input type="number" value={p.total || 0} onChange={(e) => editarPagar(p.id, 'total', Number(e.target.value))} className="bg-transparent text-white text-sm w-20 focus:outline-none border-b border-gray-700 focus:border-blue-500" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <input type="number" value={p.pagado || 0} onChange={(e) => editarPagar(p.id, 'pagado', Number(e.target.value))} className="bg-transparent text-green-400 text-sm w-20 focus:outline-none border-b border-gray-700 focus:border-blue-500" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <input type="number" value={p.pendiente || 0} onChange={(e) => editarPagar(p.id, 'pendiente', Number(e.target.value))} className="bg-transparent text-yellow-400 text-sm w-20 focus:outline-none border-b border-gray-700 focus:border-blue-500" />
+                      </td>
                       <td className="px-4 py-3 text-xs text-gray-400">{p.fecha_vencimiento}</td>
                       <td className="px-4 py-3">
                         <select
                           value={p.estado}
                           onChange={(e) => editarPagar(p.id, 'estado', e.target.value)}
-                          className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + (
-                            p.estado === 'pagado' ? 'bg-green-600' :
-                            p.estado === 'parcial' ? 'bg-blue-600' :
-                            p.estado === 'vencido' ? 'bg-red-600' : 'bg-yellow-600'
-                          )}
+                          className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusPagarColors[p.estado]}
                         >
                           <option value="pendiente">Pendiente</option>
                           <option value="parcial">Parcial</option>
@@ -459,7 +472,7 @@ export default function Finanzas() {
                 <label className="text-xs text-gray-400 mb-1 block">Producto / Servicio</label>
                 <input type="text" onChange={(e) => setNuevoPagar({...nuevoPagar, producto: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Total S/</label>
                   <input type="number" onChange={(e) => setNuevoPagar({...nuevoPagar, total: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -467,6 +480,10 @@ export default function Finanzas() {
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Pagado S/</label>
                   <input type="number" defaultValue={0} onChange={(e) => setNuevoPagar({...nuevoPagar, pagado: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Pendiente S/</label>
+                  <input type="number" defaultValue={0} onChange={(e) => setNuevoPagar({...nuevoPagar, pendiente: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Estado</label>
