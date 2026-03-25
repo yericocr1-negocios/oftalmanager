@@ -3,14 +3,7 @@ import { useState, useEffect } from 'react'
 import Sidebar from '../../components/Sidebar'
 import { supabase } from '../../lib/supabase'
 
-const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-
-const ventasEjemplo = [
-  { id: 1, mes: 'Marzo', cliente: 'OPTICA ESPEJO', dni: '', ciudad: 'Lima', vendedor: 'Alm', monto: 90, cantidad: 2, facturadoPor: 'Vortex Neg', fecha: '3/2/2026', guia: 'FAC 499', comentarios: 'PAGO 05/02/2026', tipoPago: 'contado', cuotas: 0, fechasPago: '', status: 'verde' },
-  { id: 2, mes: 'Marzo', cliente: 'OPTICA MOGOLLON', dni: '', ciudad: 'Piura', vendedor: 'Alm', monto: 420, cantidad: 8, facturadoPor: 'All In One', fecha: '3/2/2026', guia: 'FAC 246', comentarios: '', tipoPago: 'contado', cuotas: 0, fechasPago: '', status: 'verde' },
-  { id: 3, mes: 'Marzo', cliente: 'INTEGRAMED', dni: '', ciudad: 'Piura', vendedor: '', monto: 2410, cantidad: 38, facturadoPor: 'Corp. Vortex', fecha: '9/2/2026', guia: 'FAC 614', comentarios: '', tipoPago: 'credito', cuotas: 3, fechasPago: '11/03/2026, 11/04/2026, 11/05/2026', status: 'naranja' },
-  { id: 4, mes: 'Marzo', cliente: 'ALFRED ARROYO CUEVA', dni: '', ciudad: 'Lima', vendedor: 'Alm', monto: 482, cantidad: 8, facturadoPor: 'Vortex Neg', fecha: '3/2/2026', guia: 'FAC 500', comentarios: 'PAGO 05/02/2026 VIA YAPE', tipoPago: 'contado', cuotas: 0, fechasPago: '', status: 'verde' },
-]
+const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
 const statusColors = {
   verde: 'bg-green-500',
@@ -19,26 +12,38 @@ const statusColors = {
 }
 
 export default function ControlVentas() {
-  const [ventas, setVentas] = useState(ventasEjemplo)
+  const [ventas, setVentas] = useState([])
   const [clientes, setClientes] = useState([])
+  const [cargando, setCargando] = useState(true)
   const [filtroMes, setFiltroMes] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [mostrarNueva, setMostrarNueva] = useState(false)
   const [busquedaCliente, setBusquedaCliente] = useState({})
   const [mostrarDropdown, setMostrarDropdown] = useState(null)
   const [nueva, setNueva] = useState({
-    mes: 'Marzo', cliente: '', dni: '', ciudad: '', vendedor: '', monto: 0,
-    cantidad: 1, facturadoPor: '', fecha: '', guia: '', comentarios: '',
-    tipoPago: 'contado', cuotas: 0, fechasPago: '', status: 'verde'
+    mes: 'Marzo', cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0,
+    cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '',
+    tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde'
   })
 
   useEffect(() => {
-    cargarClientes()
+    cargarDatos()
   }, [])
 
-  const cargarClientes = async () => {
-    const { data } = await supabase.from('pacientes').select('id, nombres, apellidos, dni, ciudad').order('nombres')
-    setClientes(data || [])
+  const cargarDatos = async () => {
+    setCargando(true)
+    const { data: ventasData } = await supabase
+      .from('ventas_especializadas')
+      .select('*')
+      .order('created_at', { ascending: false })
+    setVentas(ventasData || [])
+
+    const { data: clientesData } = await supabase
+      .from('pacientes')
+      .select('id, nombres, apellidos, dni, ciudad')
+      .order('nombres')
+    setClientes(clientesData || [])
+    setCargando(false)
   }
 
   const clientesFiltrados = (texto) => clientes.filter(c =>
@@ -47,35 +52,63 @@ export default function ControlVentas() {
   ).slice(0, 5)
 
   const filtradas = ventas.filter(v => {
-    const coincideBusqueda = v.cliente.toLowerCase().includes(busqueda.toLowerCase()) ||
-      v.ciudad.toLowerCase().includes(busqueda.toLowerCase()) ||
-      v.vendedor.toLowerCase().includes(busqueda.toLowerCase())
+    const coincideBusqueda =
+      (v.cliente || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+      (v.ciudad || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+      (v.vendedor || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+      (v.ruc_dni || '').includes(busqueda)
     const coincideMes = filtroMes === 'todos' || v.mes === filtroMes
     return coincideBusqueda && coincideMes
   })
 
-  const totalMonto = filtradas.reduce((sum, v) => sum + v.monto, 0)
-  const totalCantidad = filtradas.reduce((sum, v) => sum + v.cantidad, 0)
+  const totalMonto = filtradas.reduce((sum, v) => sum + (v.monto || 0), 0)
+  const totalCantidad = filtradas.reduce((sum, v) => sum + (v.cantidad || 0), 0)
 
-  const editarCampo = (id, campo, valor) => {
+  const editarCampo = async (id, campo, valor) => {
     setVentas(ventas.map(v => v.id === id ? { ...v, [campo]: valor } : v))
+    await supabase.from('ventas_especializadas').update({ [campo]: valor }).eq('id', id)
   }
 
   const seleccionarCliente = (ventaId, cliente) => {
+    const nombre = cliente.nombres + ' ' + cliente.apellidos
     setVentas(ventas.map(v => v.id === ventaId ? {
-      ...v,
-      cliente: cliente.nombres + ' ' + cliente.apellidos,
-      dni: cliente.dni || '',
-      ciudad: cliente.ciudad || ''
+      ...v, cliente: nombre, ruc_dni: cliente.dni || '', ciudad: cliente.ciudad || ''
     } : v))
+    supabase.from('ventas_especializadas').update({
+      cliente: nombre, ruc_dni: cliente.dni || '', ciudad: cliente.ciudad || ''
+    }).eq('id', ventaId)
     setMostrarDropdown(null)
     setBusquedaCliente({})
   }
 
-  const guardarNueva = () => {
-    setVentas([...ventas, { ...nueva, id: ventas.length + 1 }])
+  const guardarNueva = async () => {
+    const { data, error } = await supabase
+      .from('ventas_especializadas')
+      .insert([{
+        empresa_id: 'b2711600-fbf7-4f11-b699-8024e36c7cf5',
+        ...nueva,
+      }])
+      .select().single()
+    if (error) { alert('Error: ' + error.message); return }
+    setVentas([data, ...ventas])
     setMostrarNueva(false)
-    setNueva({ mes: 'Marzo', cliente: '', dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturadoPor: '', fecha: '', guia: '', comentarios: '', tipoPago: 'contado', cuotas: 0, fechasPago: '', status: 'verde' })
+    setNueva({ mes: 'Marzo', cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde' })
+  }
+
+  const descargarCSV = () => {
+    const headers = ['Mes','Cliente','RUC/DNI','Ciudad','Vendedor','Monto','Cantidad','Facturado por','Fecha venta','Guia/Factura','Comentarios','Tipo pago','Cuotas','Fechas pago','Status']
+    const rows = filtradas.map(v => [
+      v.mes, v.cliente, v.ruc_dni, v.ciudad, v.vendedor, v.monto, v.cantidad,
+      v.facturado_por, v.fecha_venta, v.guia_factura, v.comentarios,
+      v.tipo_pago, v.num_cuotas, v.fechas_pago, v.status
+    ])
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'control-ventas.csv'
+    a.click()
   }
 
   return (
@@ -87,16 +120,21 @@ export default function ControlVentas() {
             <h2 className="text-lg font-semibold">Control de ventas</h2>
             <p className="text-sm text-gray-400">Total: S/ {totalMonto.toLocaleString()} — {totalCantidad} unidades</p>
           </div>
-          <button onClick={() => setMostrarNueva(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
-            + Nueva venta
-          </button>
+          <div className="flex gap-3">
+            <button onClick={descargarCSV} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
+              ⬇ Descargar
+            </button>
+            <button onClick={() => setMostrarNueva(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
+              + Nueva venta
+            </button>
+          </div>
         </div>
 
         <div className="p-6">
           <div className="flex gap-3 mb-4 flex-wrap">
             <input
               type="text"
-              placeholder="Buscar cliente, ciudad, vendedor..."
+              placeholder="Buscar cliente, ciudad, vendedor, DNI..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
@@ -111,39 +149,43 @@ export default function ControlVentas() {
             </select>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-gray-800">
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Mes</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Cliente</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">RUC/DNI</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Ciudad</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Vendedor</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Monto</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Cantidad</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Facturado por</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Fecha venta</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">N° Guia/Factura</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Comentarios</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Tipo pago</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Cuotas</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Fechas pago</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtradas.map((v) => (
-                  <tr key={v.id} className="hover:bg-gray-800 border border-gray-700">
-                    <td className="px-2 py-2 border border-gray-700">
-                      <select value={v.mes} onChange={(e) => editarCampo(v.id, 'mes', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none">
-                        {meses.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700 relative">
-                      <div className="flex gap-1 items-center">
+          {cargando ? (
+            <div className="text-center text-gray-400 py-12">Cargando ventas...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-gray-800">
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Mes</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Cliente</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">RUC/DNI</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Ciudad</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Vendedor</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Monto</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Cantidad</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Facturado por</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Fecha venta</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">N° Guia/Factura</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Comentarios</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Tipo pago</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Cuotas</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Fechas pago</th>
+                    <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtradas.length === 0 ? (
+                    <tr><td colSpan={15} className="px-4 py-12 text-center text-gray-400 text-sm">No hay ventas registradas</td></tr>
+                  ) : filtradas.map((v) => (
+                    <tr key={v.id} className="hover:bg-gray-800 border border-gray-700">
+                      <td className="px-2 py-2 border border-gray-700">
+                        <select value={v.mes || ''} onChange={(e) => editarCampo(v.id, 'mes', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none">
+                          {meses.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700 relative">
                         <input
-                          value={busquedaCliente[v.id] !== undefined ? busquedaCliente[v.id] : v.cliente}
+                          value={busquedaCliente[v.id] !== undefined ? busquedaCliente[v.id] : (v.cliente || '')}
                           onChange={(e) => {
                             setBusquedaCliente({...busquedaCliente, [v.id]: e.target.value})
                             editarCampo(v.id, 'cliente', e.target.value)
@@ -152,92 +194,83 @@ export default function ControlVentas() {
                           onFocus={() => setMostrarDropdown(v.id)}
                           className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32"
                         />
-                      </div>
-                      {mostrarDropdown === v.id && (busquedaCliente[v.id] || '').length > 0 && (
-                        <div className="absolute top-full left-0 bg-gray-800 border border-gray-600 rounded-lg z-20 w-48 max-h-32 overflow-auto">
-                          {clientesFiltrados(busquedaCliente[v.id] || '').map(c => (
-                            <button
-                              key={c.id}
-                              onClick={() => seleccionarCliente(v.id, c)}
-                              className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs"
-                            >
-                              <p>{c.nombres} {c.apellidos}</p>
-                              <p className="text-gray-400">{c.dni || 'Sin DNI'}</p>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <input value={v.dni} onChange={(e) => editarCampo(v.id, 'dni', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" />
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <input value={v.ciudad} onChange={(e) => editarCampo(v.id, 'ciudad', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-20" />
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <input value={v.vendedor} onChange={(e) => editarCampo(v.id, 'vendedor', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-20" />
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <input type="number" value={v.monto} onChange={(e) => editarCampo(v.id, 'monto', Number(e.target.value))} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-20" />
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <input type="number" value={v.cantidad} onChange={(e) => editarCampo(v.id, 'cantidad', Number(e.target.value))} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-16" />
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <input value={v.facturadoPor} onChange={(e) => editarCampo(v.id, 'facturadoPor', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" />
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <input value={v.fecha} onChange={(e) => editarCampo(v.id, 'fecha', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" />
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <input value={v.guia} onChange={(e) => editarCampo(v.id, 'guia', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" />
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <input value={v.comentarios} onChange={(e) => editarCampo(v.id, 'comentarios', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-40" />
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <select value={v.tipoPago} onChange={(e) => editarCampo(v.id, 'tipoPago', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none">
-                        <option value="contado">Contado</option>
-                        <option value="credito">Credito</option>
-                      </select>
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      {v.tipoPago === 'credito' ? (
-                        <input type="number" value={v.cuotas} onChange={(e) => editarCampo(v.id, 'cuotas', Number(e.target.value))} className="bg-transparent text-white text-xs w-12 focus:outline-none" />
-                      ) : <span className="text-gray-500 text-xs">-</span>}
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <input
-                        value={v.fechasPago}
-                        onChange={(e) => editarCampo(v.id, 'fechasPago', e.target.value)}
-                        placeholder="ej: 01/04, 01/05"
-                        className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32"
-                      />
-                    </td>
-                    <td className="px-2 py-2 border border-gray-700">
-                      <select
-                        value={v.status}
-                        onChange={(e) => editarCampo(v.id, 'status', e.target.value)}
-                        className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusColors[v.status]}
-                      >
-                        <option value="verde">Verde</option>
-                        <option value="naranja">Naranja</option>
-                        <option value="rojo">Rojo</option>
-                      </select>
-                    </td>
+                        {mostrarDropdown === v.id && (busquedaCliente[v.id] || '').length > 0 && (
+                          <div className="absolute top-full left-0 bg-gray-800 border border-gray-600 rounded-lg z-20 w-48 max-h-32 overflow-auto">
+                            {clientesFiltrados(busquedaCliente[v.id] || '').map(c => (
+                              <button key={c.id} onClick={() => seleccionarCliente(v.id, c)} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs">
+                                <p>{c.nombres} {c.apellidos}</p>
+                                <p className="text-gray-400">{c.dni || '-'}</p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <input value={v.ruc_dni || ''} onChange={(e) => editarCampo(v.id, 'ruc_dni', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" />
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <input value={v.ciudad || ''} onChange={(e) => editarCampo(v.id, 'ciudad', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-20" />
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <input value={v.vendedor || ''} onChange={(e) => editarCampo(v.id, 'vendedor', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-20" />
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <input type="number" value={v.monto || 0} onChange={(e) => editarCampo(v.id, 'monto', Number(e.target.value))} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-20" />
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <input type="number" value={v.cantidad || 0} onChange={(e) => editarCampo(v.id, 'cantidad', Number(e.target.value))} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-16" />
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <input value={v.facturado_por || ''} onChange={(e) => editarCampo(v.id, 'facturado_por', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" />
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <input type="date" value={v.fecha_venta || ''} onChange={(e) => editarCampo(v.id, 'fecha_venta', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-28" />
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <input value={v.guia_factura || ''} onChange={(e) => editarCampo(v.id, 'guia_factura', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" />
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <input value={v.comentarios || ''} onChange={(e) => editarCampo(v.id, 'comentarios', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-40" />
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <select value={v.tipo_pago || 'directo'} onChange={(e) => editarCampo(v.id, 'tipo_pago', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none">
+                          <option value="directo">Directo</option>
+                          <option value="credito">Credito</option>
+                        </select>
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        {v.tipo_pago === 'credito' ? (
+                          <input type="number" value={v.num_cuotas || 0} onChange={(e) => editarCampo(v.id, 'num_cuotas', Number(e.target.value))} className="bg-transparent text-white text-xs w-12 focus:outline-none" />
+                        ) : <span className="text-gray-500 text-xs">-</span>}
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <input value={v.fechas_pago || ''} onChange={(e) => editarCampo(v.id, 'fechas_pago', e.target.value)} placeholder="ej: 01/04, 01/05" className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32" />
+                      </td>
+                      <td className="px-2 py-2 border border-gray-700">
+                        <select
+                          value={v.status || 'verde'}
+                          onChange={(e) => editarCampo(v.id, 'status', e.target.value)}
+                          className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusColors[v.status || 'verde']}
+                        >
+                          <option value="verde">Verde</option>
+                          <option value="naranja">Naranja</option>
+                          <option value="rojo">Rojo</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-gray-800 font-bold">
+                    <td colSpan={5} className="px-3 py-3 text-sm border border-gray-700">TOTAL</td>
+                    <td className="px-3 py-3 text-sm text-green-400 border border-gray-700">S/ {totalMonto.toLocaleString()}</td>
+                    <td className="px-3 py-3 text-sm text-blue-400 border border-gray-700">{totalCantidad}</td>
+                    <td colSpan={8} className="border border-gray-700"></td>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-gray-800 font-bold">
-                  <td colSpan={5} className="px-3 py-3 text-sm border border-gray-700">TOTAL</td>
-                  <td className="px-3 py-3 text-sm text-green-400 border border-gray-700">S/ {totalMonto.toLocaleString()}</td>
-                  <td className="px-3 py-3 text-sm text-blue-400 border border-gray-700">{totalCantidad}</td>
-                  <td colSpan={8} className="border border-gray-700"></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
@@ -262,7 +295,7 @@ export default function ControlVentas() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">RUC / DNI</label>
-                  <input type="text" onChange={(e) => setNueva({...nueva, dni: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" onChange={(e) => setNueva({...nueva, ruc_dni: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
@@ -271,7 +304,7 @@ export default function ControlVentas() {
                   <input type="text" onChange={(e) => setNueva({...nueva, ciudad: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Vendedor / Encargado</label>
+                  <label className="text-xs text-gray-400 mb-1 block">Vendedor</label>
                   <input type="text" onChange={(e) => setNueva({...nueva, vendedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
@@ -286,35 +319,35 @@ export default function ControlVentas() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Facturado por</label>
-                  <input type="text" onChange={(e) => setNueva({...nueva, facturadoPor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" onChange={(e) => setNueva({...nueva, facturado_por: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Fecha de venta</label>
-                  <input type="date" onChange={(e) => setNueva({...nueva, fecha: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <label className="text-xs text-gray-400 mb-1 block">Fecha venta</label>
+                  <input type="date" onChange={(e) => setNueva({...nueva, fecha_venta: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">N° Guia / Factura</label>
-                  <input type="text" onChange={(e) => setNueva({...nueva, guia: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" onChange={(e) => setNueva({...nueva, guia_factura: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Tipo de pago</label>
-                  <select value={nueva.tipoPago} onChange={(e) => setNueva({...nueva, tipoPago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
-                    <option value="contado">Contado</option>
+                  <select value={nueva.tipo_pago} onChange={(e) => setNueva({...nueva, tipo_pago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="directo">Directo</option>
                     <option value="credito">Credito</option>
                   </select>
                 </div>
               </div>
-              {nueva.tipoPago === 'credito' && (
+              {nueva.tipo_pago === 'credito' && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Numero de cuotas</label>
-                    <input type="number" min={2} defaultValue={2} onChange={(e) => setNueva({...nueva, cuotas: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    <input type="number" min={2} onChange={(e) => setNueva({...nueva, num_cuotas: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Fechas de pago</label>
-                    <input type="text" placeholder="ej: 01/04/2026, 01/05/2026" onChange={(e) => setNueva({...nueva, fechasPago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    <input type="text" placeholder="ej: 01/04, 01/05" onChange={(e) => setNueva({...nueva, fechas_pago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                 </div>
               )}
