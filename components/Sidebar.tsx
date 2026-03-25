@@ -25,11 +25,7 @@ export default function Sidebar({ menuAbierto = false, setMenuAbierto = null }: 
       {menuAbierto && (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-30 md:hidden" onClick={cerrar} />
       )}
-
-      <div className={
-        'fixed md:relative z-40 md:z-auto h-full w-64 bg-gray-900 border-r border-gray-800 flex flex-col transition-transform duration-300 ' +
-        (menuAbierto ? 'translate-x-0' : '-translate-x-full md:translate-x-0')
-      }>
+      <div className={'fixed md:relative z-40 md:z-auto h-full w-64 bg-gray-900 border-r border-gray-800 flex flex-col transition-transform duration-300 ' + (menuAbierto ? 'translate-x-0' : '-translate-x-full md:translate-x-0')}>
         <div className="p-6 border-b border-gray-800 flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold text-blue-400">OFTALMANAGER</h1>
@@ -41,13 +37,7 @@ export default function Sidebar({ menuAbierto = false, setMenuAbierto = null }: 
           {menu.map((item) => {
             const activo = pathname === item.href
             return (
-              
-                key={item.label}
-                href={item.href}
-                onClick={cerrar}
-                className={'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ' +
-                  (activo ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white')}
-              >
+              <a href={item.href} key={item.label} onClick={cerrar} className={'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ' + (activo ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white')}>
                 <span>{item.icon}</span>
                 <span>{item.label}</span>
               </a>
