@@ -22,7 +22,6 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   const [tab, setTab] = useState('datos')
   const [cargando, setCargando] = useState(true)
   const [compras, setCompras] = useState([])
-  const [citas, setCitas] = useState([])
   const [doctor, setDoctor] = useState('')
   const [fecha, setFecha] = useState('')
   const [tipoPrescripcion, setTipoPrescripcion] = useState('')
@@ -276,8 +275,9 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
 
           {tab === 'compras' && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-800">
+              <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
                 <h3 className="font-semibold">Historial de compras</h3>
+                <span className="text-sm text-gray-400">{compras.length} compras</span>
               </div>
               {compras.length === 0 ? (
                 <div className="text-center text-gray-400 py-12">
@@ -301,11 +301,13 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                         <td className="px-6 py-4 text-sm text-gray-300">
                           {new Date(v.created_at).toLocaleDateString('es-PE')}
                         </td>
-                        <td className="px-6 py-4 text-sm">
+                        <td className="px-6 py-4">
                           {v.ventas_detalle && v.ventas_detalle.length > 0 ? (
-                            <div>
+                            <div className="space-y-1">
                               {v.ventas_detalle.map((d, i) => (
-                                <p key={i} className="text-xs text-gray-300">{d.cantidad}x — S/ {d.precio_unitario}</p>
+                                <p key={i} className="text-xs text-gray-200">
+                                  {d.cantidad}x <span className="text-white font-medium">{d.nombre_producto || 'Producto'}</span> — S/ {d.precio_unitario}
+                                </p>
                               ))}
                             </div>
                           ) : (

@@ -132,6 +132,7 @@ export default function VentasDiarias() {
         cantidad: item.cantidad,
         precio_unitario: item.precio,
         subtotal: item.precio * item.cantidad,
+        nombre_producto: item.nombre,
       }])
     }
 
@@ -143,6 +144,7 @@ export default function VentasDiarias() {
       metodo_pago: metodoPago,
       venta_id: ventaData.id,
       cliente_nombre: nombreCliente,
+      fecha: new Date().toISOString(),
     }])
 
     if (cuotas && numeroCuotas > 1) {
@@ -167,7 +169,7 @@ export default function VentasDiarias() {
       const mensaje = encodeURIComponent('Hola ' + nombreCliente + ', gracias por tu compra. Total: S/ ' + total)
       window.open('https://wa.me/51' + telefono + '?text=' + mensaje, '_blank')
     }
-    alert('Venta registrada y conectada con Finanzas correctamente')
+    alert('Venta registrada correctamente')
     setCarrito([])
     setClienteSeleccionado(null)
     setBusquedaCliente('')
@@ -435,6 +437,7 @@ export default function VentasDiarias() {
                     metodo_pago: 'efectivo',
                     venta_id: ventaData.id,
                     cliente_nombre: nombreCliente,
+                    fecha: new Date().toISOString(),
                   }])
 
                   if (ventaEsp.pago === 'cuotas' && ventaEsp.cuotas > 1) {
@@ -453,7 +456,7 @@ export default function VentasDiarias() {
                     }
                   }
 
-                  alert('Venta especializada registrada y conectada con Finanzas')
+                  alert('Venta especializada registrada')
                   setMostrarEspecializada(false)
                 }}
                 className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg text-sm font-medium"
