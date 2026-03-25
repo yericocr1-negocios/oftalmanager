@@ -26,9 +26,7 @@ export default function ControlVentas() {
     tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde'
   })
 
-  useEffect(() => {
-    cargarDatos()
-  }, [])
+  useEffect(() => { cargarDatos() }, [])
 
   const cargarDatos = async () => {
     setCargando(true)
@@ -37,7 +35,6 @@ export default function ControlVentas() {
       .select('*')
       .order('created_at', { ascending: false })
     setVentas(ventasData || [])
-
     const { data: clientesData } = await supabase
       .from('pacientes')
       .select('id, nombres, apellidos, dni, ciudad')
@@ -84,10 +81,7 @@ export default function ControlVentas() {
   const guardarNueva = async () => {
     const { data, error } = await supabase
       .from('ventas_especializadas')
-      .insert([{
-        empresa_id: 'b2711600-fbf7-4f11-b699-8024e36c7cf5',
-        ...nueva,
-      }])
+      .insert([{ empresa_id: 'b2711600-fbf7-4f11-b699-8024e36c7cf5', ...nueva }])
       .select().single()
     if (error) { alert('Error: ' + error.message); return }
     setVentas([data, ...ventas])
@@ -95,15 +89,24 @@ export default function ControlVentas() {
     setNueva({ mes: 'Marzo', cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde' })
   }
 
+  const escapeCSV = (val) => {
+    const str = String(val === null || val === undefined ? '' : val)
+    if (str.includes(';') || str.includes('"') || str.includes('\n')) {
+      return '"' + str.replace(/"/g, '""') + '"'
+    }
+    return str
+  }
+
   const descargarCSV = () => {
     const headers = ['Mes','Cliente','RUC/DNI','Ciudad','Vendedor','Monto','Cantidad','Facturado por','Fecha venta','Guia/Factura','Comentarios','Tipo pago','Cuotas','Fechas pago','Status']
     const rows = filtradas.map(v => [
-      v.mes, v.cliente, v.ruc_dni, v.ciudad, v.vendedor, v.monto, v.cantidad,
-      v.facturado_por, v.fecha_venta, v.guia_factura, v.comentarios,
-      v.tipo_pago, v.num_cuotas, v.fechas_pago, v.status
+      v.mes || '', v.cliente || '', v.ruc_dni || '', v.ciudad || '', v.vendedor || '',
+      v.monto || 0, v.cantidad || 0, v.facturado_por || '', v.fecha_venta || '',
+      v.guia_factura || '', v.comentarios || '', v.tipo_pago || '',
+      v.num_cuotas || 0, v.fechas_pago || '', v.status || ''
     ])
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
+    const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
