@@ -5,6 +5,7 @@ import Sidebar from '../../components/Sidebar'
 
 const EMPRESA_ID = 'b2711600-fbf7-4f11-b699-8024e36c7cf5'
 const SEDE_ID = 'd976f6cb-01f1-4962-a728-1a1012ffc305'
+const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
 const productosDisponibles = [
   { id: 1, nombre: 'Consulta General', precio: 80, categoria: 'Servicio' },
@@ -34,6 +35,8 @@ const productosDisponibles = [
 
 const categorias = ['Servicio', 'Examen', 'Montura', 'Luna', 'Contacto', 'Cirugia', 'Medicamento']
 
+const getMesActual = () => meses[new Date().getMonth()]
+
 export default function VentasDiarias() {
   const [carrito, setCarrito] = useState([])
   const [clientes, setClientes] = useState([])
@@ -47,12 +50,16 @@ export default function VentasDiarias() {
   const [cuotas, setCuotas] = useState(false)
   const [numeroCuotas, setNumeroCuotas] = useState(2)
   const [guardando, setGuardando] = useState(false)
+  const [guardandoEsp, setGuardandoEsp] = useState(false)
+  const [clienteEsp, setClienteEsp] = useState(null)
+  const [busquedaClienteEsp, setBusquedaClienteEsp] = useState('')
+  const [mostrarClientesEsp, setMostrarClientesEsp] = useState(false)
+
   const [ventaEsp, setVentaEsp] = useState({
-    ciudad: '', vendedor: '', optica: '', dni: '', codigo: '', monto: 0,
-    cantidad: 1, facturadoPor: '', fecha: '', guia: '', factura: '',
-    comentarios: '', pago: 'directo', cuotas: 1,
-    doctor: '', comprobante: 'boleta', descuento: 0,
-    laboratorio: '', fechaEntrega: '', observaciones: ''
+    mes: getMesActual(), cliente: '', ruc_dni: '', ciudad: '', vendedor: '',
+    monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '',
+    guia_factura: '', comentarios: '', tipo_pago: 'directo',
+    num_cuotas: 0, fechas_pago: '', status: 'verde'
   })
 
   useEffect(() => { cargarClientes() }, [])
@@ -65,6 +72,11 @@ export default function VentasDiarias() {
   const clientesFiltrados = clientes.filter(c =>
     (c.nombres + ' ' + c.apellidos).toLowerCase().includes(busquedaCliente.toLowerCase()) ||
     (c.dni || '').includes(busquedaCliente)
+  )
+
+  const clientesEspFiltrados = clientes.filter(c =>
+    (c.nombres + ' ' + c.apellidos).toLowerCase().includes(busquedaClienteEsp.toLowerCase()) ||
+    (c.dni || '').includes(busquedaClienteEsp)
   )
 
   const productosFiltrados = productosDisponibles.filter(p => {
@@ -112,8 +124,7 @@ export default function VentasDiarias() {
         empresa_id: EMPRESA_ID,
         sede_id: SEDE_ID,
         paciente_id: clienteSeleccionado ? clienteSeleccionado.id : null,
-        subtotal,
-        total,
+        subtotal, total,
         metodo_pago: metodoPago,
         estado: 'pagado',
         notas: nombreCliente,
@@ -121,8 +132,7 @@ export default function VentasDiarias() {
         cliente_nombre: nombreCliente,
         num_cuotas: cuotas ? numeroCuotas : 0,
       }])
-      .select()
-      .single()
+      .select().single()
 
     if (error) { alert('Error: ' + error.message); setGuardando(false); return }
 
@@ -175,11 +185,85 @@ export default function VentasDiarias() {
     setBusquedaCliente('')
   }
 
+  const registrarVentaEspecializada = async () => {
+    if (!ventaEsp.cliente && !clienteEsp) return alert('Ingresa el nombre del cliente')
+    if (!ventaEsp.monto) return alert('Ingresa el monto')
+    setGuardandoEsp(true)
+
+    const nombreCliente = clienteEsp
+      ? clienteEsp.nombres + ' ' + clienteEsp.apellidos
+      : ventaEsp.cliente
+
+    const rucDni = clienteEsp ? (clienteEsp.dni || ventaEsp.ruc_dni) : ventaEsp.ruc_dni
+    const ciudad = clienteEsp ? (clienteEsp.ciudad || ventaEsp.ciudad) : ventaEsp.ciudad
+
+    const fechasCuotas = ventaEsp.tipo_pago === 'credito' && ventaEsp.num_cuotas > 1
+      ? generarFechasCuotas(ventaEsp.num_cuotas).join(', ')
+      : ''
+
+    const { data: veData, error } = await supabase
+      .from('ventas_especializadas')
+      .insert([{
+        empresa_id: EMPRESA_ID,
+        sede_id: SEDE_ID,
+        paciente_id: clienteEsp ? clienteEsp.id : null,
+        mes: ventaEsp.mes,
+        cliente: nombreCliente,
+        ruc_dni: rucDni,
+        ciudad: ciudad,
+        vendedor: ventaEsp.vendedor,
+        monto: ventaEsp.monto,
+        cantidad: ventaEsp.cantidad,
+        facturado_por: ventaEsp.facturado_por,
+        fecha_venta: ventaEsp.fecha_venta || new Date().toISOString().split('T')[0],
+        guia_factura: ventaEsp.guia_factura,
+        comentarios: ventaEsp.comentarios,
+        tipo_pago: ventaEsp.tipo_pago,
+        num_cuotas: ventaEsp.num_cuotas,
+        fechas_pago: ventaEsp.fechas_pago || fechasCuotas,
+        status: ventaEsp.status,
+      }])
+      .select().single()
+
+    if (error) { alert('Error: ' + error.message); setGuardandoEsp(false); return }
+
+    await supabase.from('caja').insert([{
+      sede_id: SEDE_ID,
+      tipo: 'ingreso',
+      concepto: 'Venta especializada - ' + nombreCliente,
+      monto: ventaEsp.monto,
+      metodo_pago: 'efectivo',
+      cliente_nombre: nombreCliente,
+      fecha: new Date().toISOString(),
+    }])
+
+    if (ventaEsp.tipo_pago === 'credito' && ventaEsp.num_cuotas > 1) {
+      const fechas = generarFechasCuotas(ventaEsp.num_cuotas)
+      const montoCuota = Math.round(ventaEsp.monto / ventaEsp.num_cuotas)
+      for (let i = 0; i < ventaEsp.num_cuotas; i++) {
+        await supabase.from('cuotas_pago').insert([{
+          empresa_id: EMPRESA_ID,
+          cliente_nombre: nombreCliente,
+          numero_cuota: i + 1,
+          monto: montoCuota,
+          fecha_vencimiento: fechas[i],
+          estado: 'pendiente',
+        }])
+      }
+    }
+
+    setGuardandoEsp(false)
+    alert('Venta especializada registrada y conectada con Finanzas y Control de ventas')
+    setMostrarEspecializada(false)
+    setVentaEsp({ mes: getMesActual(), cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde' })
+    setClienteEsp(null)
+    setBusquedaClienteEsp('')
+  }
+
   const enviarWhatsApp = () => {
     const telefono = prompt('Ingresa el telefono del cliente (sin +51):')
     if (telefono) {
-      const mensaje = encodeURIComponent('Hola, le contactamos desde OFTALMANAGER. En que podemos ayudarle?')
-      window.open('https://wa.me/51' + telefono + '?text=' + mensaje, '_blank')
+      window.open('https://wa.me/51' + telefono + '?text=' + encodeURIComponent('Hola, le contactamos desde OFTALMANAGER.'), '_blank')
     }
   }
 
@@ -339,129 +423,125 @@ export default function VentasDiarias() {
 
       {mostrarEspecializada && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 overflow-auto py-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-3xl">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-2xl">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold">Registro de venta especializada</h3>
+              <h3 className="text-lg font-semibold">Venta especializada</h3>
               <button onClick={() => setMostrarEspecializada(false)} className="text-gray-400 hover:text-white text-xl">X</button>
             </div>
             <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Mes</label>
+                  <select value={ventaEsp.mes} onChange={(e) => setVentaEsp({...ventaEsp, mes: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    {meses.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Cliente</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Buscar o escribir cliente..."
+                      value={clienteEsp ? clienteEsp.nombres + ' ' + clienteEsp.apellidos : busquedaClienteEsp}
+                      onChange={(e) => { setBusquedaClienteEsp(e.target.value); setClienteEsp(null); setMostrarClientesEsp(true); setVentaEsp({...ventaEsp, cliente: e.target.value}) }}
+                      onFocus={() => setMostrarClientesEsp(true)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    />
+                    {mostrarClientesEsp && busquedaClienteEsp && (
+                      <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 z-20 max-h-36 overflow-auto">
+                        {clientesEspFiltrados.slice(0, 4).map(c => (
+                          <button key={c.id} onClick={() => { setClienteEsp(c); setBusquedaClienteEsp(''); setMostrarClientesEsp(false); setVentaEsp({...ventaEsp, cliente: c.nombres + ' ' + c.apellidos, ruc_dni: c.dni || '', ciudad: c.ciudad || ''}) }} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs">
+                            <p>{c.nombres} {c.apellidos}</p>
+                            <p className="text-gray-400">{c.dni || '-'}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {clienteEsp && (
+                    <div className="mt-1 bg-blue-900 rounded px-2 py-1 flex justify-between items-center">
+                      <p className="text-xs text-blue-300">{clienteEsp.nombres} {clienteEsp.apellidos}</p>
+                      <button onClick={() => setClienteEsp(null)} className="text-blue-400 text-xs">X</button>
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
+                  <label className="text-xs text-gray-400 mb-1 block">RUC / DNI</label>
+                  <input type="text" value={ventaEsp.ruc_dni} onChange={(e) => setVentaEsp({...ventaEsp, ruc_dni: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
                   <label className="text-xs text-gray-400 mb-1 block">Ciudad</label>
-                  <input type="text" onChange={(e) => setVentaEsp({...ventaEsp, ciudad: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={ventaEsp.ciudad} onChange={(e) => setVentaEsp({...ventaEsp, ciudad: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Vendedor</label>
-                  <input type="text" onChange={(e) => setVentaEsp({...ventaEsp, vendedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Optica / Cliente</label>
-                  <input type="text" onChange={(e) => setVentaEsp({...ventaEsp, optica: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={ventaEsp.vendedor} onChange={(e) => setVentaEsp({...ventaEsp, vendedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">DNI / RUC</label>
-                  <input type="text" onChange={(e) => setVentaEsp({...ventaEsp, dni: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
                   <label className="text-xs text-gray-400 mb-1 block">Monto S/</label>
-                  <input type="number" onChange={(e) => setVentaEsp({...ventaEsp, monto: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="number" value={ventaEsp.monto} onChange={(e) => setVentaEsp({...ventaEsp, monto: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Cantidad</label>
-                  <input type="number" defaultValue={1} onChange={(e) => setVentaEsp({...ventaEsp, cantidad: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="number" value={ventaEsp.cantidad} onChange={(e) => setVentaEsp({...ventaEsp, cantidad: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Facturado por</label>
-                  <input type="text" onChange={(e) => setVentaEsp({...ventaEsp, facturadoPor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Fecha de venta</label>
-                  <input type="date" onChange={(e) => setVentaEsp({...ventaEsp, fecha: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">N° Guia / Factura</label>
-                  <input type="text" onChange={(e) => setVentaEsp({...ventaEsp, guia: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={ventaEsp.facturado_por} onChange={(e) => setVentaEsp({...ventaEsp, facturado_por: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Forma de pago</label>
-                  <select onChange={(e) => setVentaEsp({...ventaEsp, pago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                  <label className="text-xs text-gray-400 mb-1 block">Fecha venta</label>
+                  <input type="date" value={ventaEsp.fecha_venta} onChange={(e) => setVentaEsp({...ventaEsp, fecha_venta: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">N° Guia / Factura</label>
+                  <input type="text" value={ventaEsp.guia_factura} onChange={(e) => setVentaEsp({...ventaEsp, guia_factura: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Tipo de pago</label>
+                  <select value={ventaEsp.tipo_pago} onChange={(e) => setVentaEsp({...ventaEsp, tipo_pago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                     <option value="directo">Directo / Contado</option>
-                    <option value="cuotas">Cuotas</option>
                     <option value="credito">Credito</option>
                   </select>
                 </div>
-                {ventaEsp.pago === 'cuotas' && (
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Status</label>
+                  <select value={ventaEsp.status} onChange={(e) => setVentaEsp({...ventaEsp, status: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="verde">Verde</option>
+                    <option value="naranja">Naranja</option>
+                    <option value="rojo">Rojo</option>
+                  </select>
+                </div>
+              </div>
+              {ventaEsp.tipo_pago === 'credito' && (
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Numero de cuotas</label>
-                    <input type="number" min={2} defaultValue={2} onChange={(e) => setVentaEsp({...ventaEsp, cuotas: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    <input type="number" min={2} value={ventaEsp.num_cuotas || 2} onChange={(e) => setVentaEsp({...ventaEsp, num_cuotas: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                   </div>
-                )}
-              </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Fechas de pago</label>
+                    <input type="text" placeholder="ej: 01/04, 01/05" value={ventaEsp.fechas_pago} onChange={(e) => setVentaEsp({...ventaEsp, fechas_pago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">Comentarios</label>
-                <textarea onChange={(e) => setVentaEsp({...ventaEsp, comentarios: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
+                <textarea value={ventaEsp.comentarios} onChange={(e) => setVentaEsp({...ventaEsp, comentarios: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-16" />
               </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setMostrarEspecializada(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
-              <button
-                onClick={async () => {
-                  const nombreCliente = ventaEsp.optica || 'Cliente'
-                  const { data: ventaData, error } = await supabase.from('ventas').insert([{
-                    empresa_id: EMPRESA_ID,
-                    sede_id: SEDE_ID,
-                    subtotal: ventaEsp.monto,
-                    total: ventaEsp.monto - ventaEsp.descuento,
-                    metodo_pago: 'efectivo',
-                    estado: 'pagado',
-                    notas: ventaEsp.comentarios,
-                    tipo_comprobante: ventaEsp.comprobante || 'boleta',
-                    numero_comprobante: ventaEsp.guia,
-                    cliente_nombre: nombreCliente,
-                    num_cuotas: ventaEsp.pago === 'cuotas' ? ventaEsp.cuotas : 0,
-                  }]).select().single()
-
-                  if (error) { alert('Error: ' + error.message); return }
-
-                  await supabase.from('caja').insert([{
-                    sede_id: SEDE_ID,
-                    tipo: 'ingreso',
-                    concepto: 'Venta especializada - ' + nombreCliente,
-                    monto: ventaEsp.monto - ventaEsp.descuento,
-                    metodo_pago: 'efectivo',
-                    venta_id: ventaData.id,
-                    cliente_nombre: nombreCliente,
-                    fecha: new Date().toISOString(),
-                  }])
-
-                  if (ventaEsp.pago === 'cuotas' && ventaEsp.cuotas > 1) {
-                    const fechas = generarFechasCuotas(ventaEsp.cuotas)
-                    const montoCuota = Math.round((ventaEsp.monto - ventaEsp.descuento) / ventaEsp.cuotas)
-                    for (let i = 0; i < ventaEsp.cuotas; i++) {
-                      await supabase.from('cuotas_pago').insert([{
-                        venta_id: ventaData.id,
-                        empresa_id: EMPRESA_ID,
-                        cliente_nombre: nombreCliente,
-                        numero_cuota: i + 1,
-                        monto: montoCuota,
-                        fecha_vencimiento: fechas[i],
-                        estado: 'pendiente',
-                      }])
-                    }
-                  }
-
-                  alert('Venta especializada registrada')
-                  setMostrarEspecializada(false)
-                }}
-                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg text-sm font-medium"
-              >
-                Registrar venta
+              <button onClick={registrarVentaEspecializada} disabled={guardandoEsp} className={'flex-1 text-white py-2 rounded-lg text-sm font-medium ' + (guardandoEsp ? 'bg-gray-600' : 'bg-purple-600 hover:bg-purple-700')}>
+                {guardandoEsp ? 'Guardando...' : 'Registrar venta'}
               </button>
             </div>
           </div>
