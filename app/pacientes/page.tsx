@@ -14,6 +14,7 @@ export default function Pacientes() {
   const [busqueda, setBusqueda] = useState('')
   const [mostrar, setMostrar] = useState(false)
   const [cargando, setCargando] = useState(true)
+  const [menuAbierto, setMenuAbierto] = useState(false)
   const [nuevo, setNuevo] = useState({
     nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', encargado: '', status: 'verde'
   })
@@ -47,9 +48,7 @@ export default function Pacientes() {
 
   const escapeCSV = (val) => {
     const str = String(val === null || val === undefined ? '' : val)
-    if (str.includes(';') || str.includes('"') || str.includes('\n')) {
-      return '"' + str.replace(/"/g, '""') + '"'
-    }
+    if (str.includes(';') || str.includes('"') || str.includes('\n')) return '"' + str.replace(/"/g, '""') + '"'
     return str
   }
 
@@ -70,47 +69,79 @@ export default function Pacientes() {
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
-      <Sidebar />
+      <Sidebar menuAbierto={menuAbierto} setMenuAbierto={setMenuAbierto} />
       <div className="flex-1 overflow-auto">
-        <div className="border-b border-gray-800 px-8 py-4 flex justify-between items-center">
-          <div>
-            <h2 className="text-lg font-semibold">Clientes (pacientes)</h2>
-            <p className="text-sm text-gray-400">{filtrados.length} clientes encontrados</p>
+        <div className="border-b border-gray-800 px-4 md:px-8 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setMenuAbierto(!menuAbierto)} className="md:hidden text-gray-400 hover:text-white text-xl">☰</button>
+            <div>
+              <h2 className="text-base md:text-lg font-semibold">Clientes (pacientes)</h2>
+              <p className="text-xs md:text-sm text-gray-400">{filtrados.length} clientes</p>
+            </div>
           </div>
-          <div className="flex gap-3">
-            <button onClick={descargarCSV} className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
+          <div className="flex gap-2">
+            <button onClick={descargarCSV} className="bg-gray-700 hover:bg-gray-600 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm hidden md:block">
               ⬇ Descargar
             </button>
-            <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
-              + Nuevo cliente
+            <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">
+              + Nuevo
             </button>
           </div>
         </div>
 
-        <div className="p-8">
-          <input type="text" placeholder="Buscar por nombre, DNI o telefono..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 mb-6" />
+        <div className="p-4 md:p-8">
+          <input type="text" placeholder="Buscar por nombre, DNI o telefono..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 mb-4 md:mb-6" />
 
           {cargando ? (
             <div className="text-center text-gray-400 py-12">Cargando clientes...</div>
           ) : (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-800">
-                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Cliente</th>
-                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">RUC/DNI</th>
-                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Telefono</th>
-                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Ciudad</th>
-                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Encargado</th>
-                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Status</th>
-                    <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtrados.length === 0 ? (
-                    <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400 text-sm">No hay clientes registrados.</td></tr>
-                  ) : (
-                    filtrados.map((p) => (
+            <>
+              <div className="md:hidden space-y-3">
+                {filtrados.length === 0 ? (
+                  <p className="text-center text-gray-400 py-8 text-sm">No hay clientes registrados</p>
+                ) : filtrados.map((p) => (
+                  <div key={p.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">{p.nombres[0]}</div>
+                        <div>
+                          <p className="font-medium text-sm">{p.nombres} {p.apellidos}</p>
+                          <p className="text-xs text-gray-400">{p.dni || 'Sin DNI'}</p>
+                        </div>
+                      </div>
+                      <select value={p.status || 'verde'} onChange={(e) => cambiarStatus(p.id, e.target.value)} className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusColors[p.status || 'verde']}>
+                        <option value="verde">Verde</option>
+                        <option value="naranja">Naranja</option>
+                        <option value="rojo">Rojo</option>
+                      </select>
+                    </div>
+                    <div className="flex justify-between items-center mt-2">
+                      <div className="text-xs text-gray-400">
+                        <p>{p.telefono || '-'} • {p.ciudad || '-'}</p>
+                      </div>
+                      <a href={'/pacientes/' + p.id} className="text-blue-400 hover:text-blue-300 text-xs">Ver perfil →</a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-800">
+                      <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Cliente</th>
+                      <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">RUC/DNI</th>
+                      <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Telefono</th>
+                      <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Ciudad</th>
+                      <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Encargado</th>
+                      <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Status</th>
+                      <th className="text-left px-6 py-4 text-xs text-gray-400 uppercase">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtrados.length === 0 ? (
+                      <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400 text-sm">No hay clientes registrados.</td></tr>
+                    ) : filtrados.map((p) => (
                       <tr key={p.id} className="border-b border-gray-800 hover:bg-gray-800">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -123,28 +154,28 @@ export default function Pacientes() {
                         <td className="px-6 py-4 text-sm text-gray-300">{p.ciudad || '-'}</td>
                         <td className="px-6 py-4 text-sm text-gray-300">{p.encargado || '-'}</td>
                         <td className="px-6 py-4">
-                          <select value={p.status || 'verde'} onChange={(e) => cambiarStatus(p.id, e.target.value)} className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + (statusColors[p.status || 'verde'])}>
+                          <select value={p.status || 'verde'} onChange={(e) => cambiarStatus(p.id, e.target.value)} className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusColors[p.status || 'verde']}>
                             <option value="verde">Verde</option>
                             <option value="naranja">Naranja</option>
                             <option value="rojo">Rojo</option>
                           </select>
                         </td>
                         <td className="px-6 py-4">
-                          <a href={'/pacientes/' + p.id} className="text-blue-400 hover:text-blue-300 text-sm mr-3">Ver</a>
+                          <a href={'/pacientes/' + p.id} className="text-blue-400 hover:text-blue-300 text-sm">Ver</a>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>
 
       {mostrar && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg max-h-screen overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold">Nuevo cliente</h3>
               <button onClick={() => setMostrar(false)} className="text-gray-400 hover:text-white text-xl">X</button>
