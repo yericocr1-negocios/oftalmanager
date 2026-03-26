@@ -34,7 +34,6 @@ const productosDisponibles = [
 ]
 
 const categorias = ['Servicio', 'Examen', 'Montura', 'Luna', 'Contacto', 'Cirugia', 'Medicamento']
-
 const getMesActual = () => meses[new Date().getMonth()]
 
 export default function VentasDiarias() {
@@ -51,10 +50,11 @@ export default function VentasDiarias() {
   const [numeroCuotas, setNumeroCuotas] = useState(2)
   const [guardando, setGuardando] = useState(false)
   const [guardandoEsp, setGuardandoEsp] = useState(false)
+  const [menuAbierto, setMenuAbierto] = useState(false)
+  const [mostrarCarrito, setMostrarCarrito] = useState(false)
   const [clienteEsp, setClienteEsp] = useState(null)
   const [busquedaClienteEsp, setBusquedaClienteEsp] = useState('')
   const [mostrarClientesEsp, setMostrarClientesEsp] = useState(false)
-
   const [ventaEsp, setVentaEsp] = useState({
     mes: getMesActual(), cliente: '', ruc_dni: '', ciudad: '', vendedor: '',
     monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '',
@@ -92,6 +92,7 @@ export default function VentasDiarias() {
     } else {
       setCarrito([...carrito, { ...producto, cantidad: 1 }])
     }
+    setMostrarCarrito(true)
   }
 
   const quitarDelCarrito = (id) => setCarrito(carrito.filter(item => item.id !== id))
@@ -121,15 +122,11 @@ export default function VentasDiarias() {
     const { data: ventaData, error } = await supabase
       .from('ventas')
       .insert([{
-        empresa_id: EMPRESA_ID,
-        sede_id: SEDE_ID,
+        empresa_id: EMPRESA_ID, sede_id: SEDE_ID,
         paciente_id: clienteSeleccionado ? clienteSeleccionado.id : null,
-        subtotal, total,
-        metodo_pago: metodoPago,
-        estado: 'pagado',
-        notas: nombreCliente,
-        tipo_comprobante: 'boleta',
-        cliente_nombre: nombreCliente,
+        subtotal, total, metodo_pago: metodoPago,
+        estado: 'pagado', notas: nombreCliente,
+        tipo_comprobante: 'boleta', cliente_nombre: nombreCliente,
         num_cuotas: cuotas ? numeroCuotas : 0,
       }])
       .select().single()
@@ -138,22 +135,17 @@ export default function VentasDiarias() {
 
     for (const item of carrito) {
       await supabase.from('ventas_detalle').insert([{
-        venta_id: ventaData.id,
-        cantidad: item.cantidad,
-        precio_unitario: item.precio,
-        subtotal: item.precio * item.cantidad,
+        venta_id: ventaData.id, cantidad: item.cantidad,
+        precio_unitario: item.precio, subtotal: item.precio * item.cantidad,
         nombre_producto: item.nombre,
       }])
     }
 
     await supabase.from('caja').insert([{
-      sede_id: SEDE_ID,
-      tipo: 'ingreso',
+      sede_id: SEDE_ID, tipo: 'ingreso',
       concepto: 'Venta - ' + carrito.map(i => i.nombre).join(', '),
-      monto: total,
-      metodo_pago: metodoPago,
-      venta_id: ventaData.id,
-      cliente_nombre: nombreCliente,
+      monto: total, metodo_pago: metodoPago,
+      venta_id: ventaData.id, cliente_nombre: nombreCliente,
       fecha: new Date().toISOString(),
     }])
 
@@ -162,27 +154,19 @@ export default function VentasDiarias() {
       const montoCuota = Math.round(total / numeroCuotas)
       for (let i = 0; i < numeroCuotas; i++) {
         await supabase.from('cuotas_pago').insert([{
-          venta_id: ventaData.id,
-          empresa_id: EMPRESA_ID,
-          cliente_nombre: nombreCliente,
-          numero_cuota: i + 1,
-          monto: montoCuota,
-          fecha_vencimiento: fechas[i],
-          estado: 'pendiente',
+          venta_id: ventaData.id, empresa_id: EMPRESA_ID,
+          cliente_nombre: nombreCliente, numero_cuota: i + 1,
+          monto: montoCuota, fecha_vencimiento: fechas[i], estado: 'pendiente',
         }])
       }
     }
 
     setGuardando(false)
-    const telefono = prompt('Telefono para WhatsApp (opcional, sin +51):')
-    if (telefono) {
-      const mensaje = encodeURIComponent('Hola ' + nombreCliente + ', gracias por tu compra. Total: S/ ' + total)
-      window.open('https://wa.me/51' + telefono + '?text=' + mensaje, '_blank')
-    }
     alert('Venta registrada correctamente')
     setCarrito([])
     setClienteSeleccionado(null)
     setBusquedaCliente('')
+    setMostrarCarrito(false)
   }
 
   const registrarVentaEspecializada = async () => {
@@ -190,51 +174,30 @@ export default function VentasDiarias() {
     if (!ventaEsp.monto) return alert('Ingresa el monto')
     setGuardandoEsp(true)
 
-    const nombreCliente = clienteEsp
-      ? clienteEsp.nombres + ' ' + clienteEsp.apellidos
-      : ventaEsp.cliente
-
+    const nombreCliente = clienteEsp ? clienteEsp.nombres + ' ' + clienteEsp.apellidos : ventaEsp.cliente
     const rucDni = clienteEsp ? (clienteEsp.dni || ventaEsp.ruc_dni) : ventaEsp.ruc_dni
     const ciudad = clienteEsp ? (clienteEsp.ciudad || ventaEsp.ciudad) : ventaEsp.ciudad
+    const fechasCuotas = ventaEsp.tipo_pago === 'credito' && ventaEsp.num_cuotas > 1 ? generarFechasCuotas(ventaEsp.num_cuotas).join(', ') : ''
 
-    const fechasCuotas = ventaEsp.tipo_pago === 'credito' && ventaEsp.num_cuotas > 1
-      ? generarFechasCuotas(ventaEsp.num_cuotas).join(', ')
-      : ''
-
-    const { data: veData, error } = await supabase
-      .from('ventas_especializadas')
-      .insert([{
-        empresa_id: EMPRESA_ID,
-        sede_id: SEDE_ID,
-        paciente_id: clienteEsp ? clienteEsp.id : null,
-        mes: ventaEsp.mes,
-        cliente: nombreCliente,
-        ruc_dni: rucDni,
-        ciudad: ciudad,
-        vendedor: ventaEsp.vendedor,
-        monto: ventaEsp.monto,
-        cantidad: ventaEsp.cantidad,
-        facturado_por: ventaEsp.facturado_por,
-        fecha_venta: ventaEsp.fecha_venta || new Date().toISOString().split('T')[0],
-        guia_factura: ventaEsp.guia_factura,
-        comentarios: ventaEsp.comentarios,
-        tipo_pago: ventaEsp.tipo_pago,
-        num_cuotas: ventaEsp.num_cuotas,
-        fechas_pago: ventaEsp.fechas_pago || fechasCuotas,
-        status: ventaEsp.status,
-      }])
-      .select().single()
+    const { error } = await supabase.from('ventas_especializadas').insert([{
+      empresa_id: EMPRESA_ID, sede_id: SEDE_ID,
+      paciente_id: clienteEsp ? clienteEsp.id : null,
+      mes: ventaEsp.mes, cliente: nombreCliente, ruc_dni: rucDni,
+      ciudad, vendedor: ventaEsp.vendedor, monto: ventaEsp.monto,
+      cantidad: ventaEsp.cantidad, facturado_por: ventaEsp.facturado_por,
+      fecha_venta: ventaEsp.fecha_venta || new Date().toISOString().split('T')[0],
+      guia_factura: ventaEsp.guia_factura, comentarios: ventaEsp.comentarios,
+      tipo_pago: ventaEsp.tipo_pago, num_cuotas: ventaEsp.num_cuotas,
+      fechas_pago: ventaEsp.fechas_pago || fechasCuotas, status: ventaEsp.status,
+    }])
 
     if (error) { alert('Error: ' + error.message); setGuardandoEsp(false); return }
 
     await supabase.from('caja').insert([{
-      sede_id: SEDE_ID,
-      tipo: 'ingreso',
+      sede_id: SEDE_ID, tipo: 'ingreso',
       concepto: 'Venta especializada - ' + nombreCliente,
-      monto: ventaEsp.monto,
-      metodo_pago: 'efectivo',
-      cliente_nombre: nombreCliente,
-      fecha: new Date().toISOString(),
+      monto: ventaEsp.monto, metodo_pago: 'efectivo',
+      cliente_nombre: nombreCliente, fecha: new Date().toISOString(),
     }])
 
     if (ventaEsp.tipo_pago === 'credito' && ventaEsp.num_cuotas > 1) {
@@ -242,58 +205,53 @@ export default function VentasDiarias() {
       const montoCuota = Math.round(ventaEsp.monto / ventaEsp.num_cuotas)
       for (let i = 0; i < ventaEsp.num_cuotas; i++) {
         await supabase.from('cuotas_pago').insert([{
-          empresa_id: EMPRESA_ID,
-          cliente_nombre: nombreCliente,
-          numero_cuota: i + 1,
-          monto: montoCuota,
-          fecha_vencimiento: fechas[i],
-          estado: 'pendiente',
+          empresa_id: EMPRESA_ID, cliente_nombre: nombreCliente,
+          numero_cuota: i + 1, monto: montoCuota,
+          fecha_vencimiento: fechas[i], estado: 'pendiente',
         }])
       }
     }
 
     setGuardandoEsp(false)
-    alert('Venta especializada registrada y conectada con Finanzas y Control de ventas')
+    alert('Venta especializada registrada')
     setMostrarEspecializada(false)
     setVentaEsp({ mes: getMesActual(), cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde' })
     setClienteEsp(null)
     setBusquedaClienteEsp('')
   }
 
-  const enviarWhatsApp = () => {
-    const telefono = prompt('Ingresa el telefono del cliente (sin +51):')
-    if (telefono) {
-      window.open('https://wa.me/51' + telefono + '?text=' + encodeURIComponent('Hola, le contactamos desde OFTALMANAGER.'), '_blank')
-    }
-  }
-
   return (
     <div className="flex h-screen bg-gray-950 text-white">
-      <Sidebar />
+      <Sidebar menuAbierto={menuAbierto} setMenuAbierto={setMenuAbierto} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="border-b border-gray-800 px-8 py-4 flex justify-between items-center">
-          <div>
-            <h2 className="text-lg font-semibold">Ventas diarias</h2>
-            <p className="text-sm text-gray-400">POS y registro de ventas</p>
+        <div className="border-b border-gray-800 px-4 md:px-8 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setMenuAbierto(!menuAbierto)} className="md:hidden text-gray-400 hover:text-white text-xl">☰</button>
+            <div>
+              <h2 className="text-base md:text-lg font-semibold">Ventas diarias</h2>
+              <p className="text-xs md:text-sm text-gray-400">POS</p>
+            </div>
           </div>
-          <div className="flex gap-3">
-            <button onClick={enviarWhatsApp} className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm">
-              💬 WhatsApp
+          <div className="flex gap-2">
+            <button onClick={() => setMostrarEspecializada(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">
+              + Especializada
             </button>
-            <button onClick={() => setMostrarEspecializada(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm">
-              + Venta especializada
-            </button>
+            {carrito.length > 0 && (
+              <button onClick={() => setMostrarCarrito(true)} className="md:hidden bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">
+                🛒 {carrito.length} — S/ {total}
+              </button>
+            )}
           </div>
         </div>
 
         <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 overflow-auto p-6">
-            <div className="flex gap-2 mb-4">
-              <input type="text" placeholder="Buscar producto..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
+          <div className="flex-1 overflow-auto p-3 md:p-6">
+            <div className="flex gap-2 mb-3">
+              <input type="text" placeholder="Buscar producto..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
             </div>
-            <div className="flex gap-2 mb-4 flex-wrap">
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
               {['todos', ...categorias].map((cat) => (
-                <button key={cat} onClick={() => setCategoriaFiltro(cat)} className={'px-3 py-1 rounded-lg text-xs transition-all ' + (categoriaFiltro === cat ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
+                <button key={cat} onClick={() => setCategoriaFiltro(cat)} className={'px-3 py-1 rounded-lg text-xs transition-all whitespace-nowrap ' + (categoriaFiltro === cat ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
                   {cat === 'todos' ? 'Todos' : cat}
                 </button>
               ))}
@@ -302,13 +260,13 @@ export default function VentasDiarias() {
               const prods = productosFiltrados.filter(p => p.categoria === cat)
               if (prods.length === 0) return null
               return (
-                <div key={cat} className="mb-6">
-                  <h3 className="text-xs text-gray-400 uppercase mb-3">{cat}</h3>
-                  <div className="grid grid-cols-2 gap-3">
+                <div key={cat} className="mb-4 md:mb-6">
+                  <h3 className="text-xs text-gray-400 uppercase mb-2 md:mb-3">{cat}</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-2 gap-2 md:gap-3">
                     {prods.map((producto) => (
-                      <button key={producto.id} onClick={() => agregarAlCarrito(producto)} className="bg-gray-900 border border-gray-800 hover:border-blue-500 rounded-xl p-4 text-left transition-all">
-                        <p className="text-sm font-medium">{producto.nombre}</p>
-                        <p className="text-blue-400 font-bold mt-1">S/ {producto.precio}</p>
+                      <button key={producto.id} onClick={() => agregarAlCarrito(producto)} className="bg-gray-900 border border-gray-800 hover:border-blue-500 rounded-xl p-3 md:p-4 text-left transition-all">
+                        <p className="text-xs md:text-sm font-medium leading-tight">{producto.nombre}</p>
+                        <p className="text-blue-400 font-bold mt-1 text-sm">S/ {producto.precio}</p>
                       </button>
                     ))}
                   </div>
@@ -317,13 +275,13 @@ export default function VentasDiarias() {
             })}
           </div>
 
-          <div className="w-80 bg-gray-900 border-l border-gray-800 flex flex-col">
+          <div className="hidden md:flex w-80 bg-gray-900 border-l border-gray-800 flex-col">
             <div className="p-4 border-b border-gray-800">
-              <h3 className="font-semibold mb-3">Detalle de venta</h3>
+              <h3 className="font-semibold mb-3 text-sm">Detalle de venta</h3>
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Buscar cliente por nombre o DNI..."
+                  placeholder="Buscar cliente..."
                   value={clienteSeleccionado ? clienteSeleccionado.nombres + ' ' + clienteSeleccionado.apellidos : busquedaCliente}
                   onChange={(e) => { setBusquedaCliente(e.target.value); setClienteSeleccionado(null); setMostrarClientes(true) }}
                   onFocus={() => setMostrarClientes(true)}
@@ -334,7 +292,7 @@ export default function VentasDiarias() {
                     {clientesFiltrados.slice(0, 5).map(c => (
                       <button key={c.id} onClick={() => { setClienteSeleccionado(c); setBusquedaCliente(''); setMostrarClientes(false) }} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm">
                         <p>{c.nombres} {c.apellidos}</p>
-                        <p className="text-xs text-gray-400">{c.dni || 'Sin DNI'} — {c.ciudad || '-'}</p>
+                        <p className="text-xs text-gray-400">{c.dni || 'Sin DNI'}</p>
                       </button>
                     ))}
                     <button onClick={() => setMostrarClientes(false)} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs text-blue-400 border-t border-gray-700">
@@ -350,10 +308,9 @@ export default function VentasDiarias() {
                 </div>
               )}
             </div>
-
             <div className="flex-1 overflow-auto p-4">
               {carrito.length === 0 ? (
-                <div className="text-center text-gray-500 text-sm py-8">Haz click en un producto para agregarlo</div>
+                <div className="text-center text-gray-500 text-sm py-8">Haz click en un producto</div>
               ) : (
                 <div className="space-y-3">
                   {carrito.map((item) => (
@@ -364,56 +321,33 @@ export default function VentasDiarias() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-blue-400 text-sm font-bold">S/ {item.precio * item.cantidad}</span>
-                        <button onClick={() => quitarDelCarrito(item.id)} className="text-red-400 hover:text-red-300 text-lg">x</button>
+                        <button onClick={() => quitarDelCarrito(item.id)} className="text-red-400 text-lg">x</button>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-
             <div className="p-4 border-t border-gray-800">
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Subtotal</span>
-                  <span>S/ {subtotal}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg border-t border-gray-700 pt-2">
-                  <span>Total</span>
-                  <span className="text-green-400">S/ {total}</span>
-                </div>
+              <div className="flex justify-between font-bold text-lg mb-4">
+                <span>Total</span>
+                <span className="text-green-400">S/ {total}</span>
               </div>
               <div className="mb-3">
-                <p className="text-xs text-gray-400 mb-2">Metodo de pago</p>
                 <div className="grid grid-cols-3 gap-2">
                   {['efectivo', 'tarjeta', 'yape'].map((metodo) => (
-                    <button key={metodo} onClick={() => setMetodoPago(metodo)} className={'py-2 rounded-lg text-xs font-medium transition-all ' + (metodoPago === metodo ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700')}>
+                    <button key={metodo} onClick={() => setMetodoPago(metodo)} className={'py-2 rounded-lg text-xs font-medium ' + (metodoPago === metodo ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400')}>
                       {metodo.charAt(0).toUpperCase() + metodo.slice(1)}
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="mb-3">
-                <div className="flex items-center gap-3 mb-2">
-                  <input type="checkbox" id="cuotas" checked={cuotas} onChange={(e) => setCuotas(e.target.checked)} className="w-4 h-4" />
-                  <label htmlFor="cuotas" className="text-sm text-gray-300">Pago en cuotas</label>
-                </div>
-                {cuotas && (
-                  <div className="bg-gray-800 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs text-gray-400">Numero de cuotas:</span>
-                      <input type="number" min={2} max={24} value={numeroCuotas} onChange={(e) => setNumeroCuotas(Number(e.target.value))} className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white" />
-                    </div>
-                    <p className="text-xs text-green-400">S/ {Math.round(total / numeroCuotas)} por cuota</p>
-                    <div className="mt-2 space-y-1">
-                      {generarFechasCuotas(numeroCuotas).map((fecha, i) => (
-                        <p key={i} className="text-xs text-gray-400">Cuota {i + 1}: {fecha}</p>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              <div className="mb-3 flex items-center gap-3">
+                <input type="checkbox" id="cuotas" checked={cuotas} onChange={(e) => setCuotas(e.target.checked)} className="w-4 h-4" />
+                <label htmlFor="cuotas" className="text-sm text-gray-300">Cuotas</label>
+                {cuotas && <input type="number" min={2} max={24} value={numeroCuotas} onChange={(e) => setNumeroCuotas(Number(e.target.value))} className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white" />}
               </div>
-              <button onClick={cobrar} disabled={guardando} className={'w-full text-white py-3 rounded-lg font-bold transition-all ' + (guardando ? 'bg-gray-600' : 'bg-green-600 hover:bg-green-700')}>
+              <button onClick={cobrar} disabled={guardando} className={'w-full text-white py-3 rounded-lg font-bold ' + (guardando ? 'bg-gray-600' : 'bg-green-600 hover:bg-green-700')}>
                 {guardando ? 'Guardando...' : 'Cobrar S/ ' + total}
               </button>
             </div>
@@ -421,9 +355,78 @@ export default function VentasDiarias() {
         </div>
       </div>
 
+      {mostrarCarrito && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-end justify-center z-50 md:hidden">
+          <div className="bg-gray-900 border-t border-gray-700 rounded-t-2xl p-6 w-full max-h-screen overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Carrito</h3>
+              <button onClick={() => setMostrarCarrito(false)} className="text-gray-400 text-xl">X</button>
+            </div>
+            <div className="relative mb-4">
+              <input
+                type="text"
+                placeholder="Buscar cliente..."
+                value={clienteSeleccionado ? clienteSeleccionado.nombres + ' ' + clienteSeleccionado.apellidos : busquedaCliente}
+                onChange={(e) => { setBusquedaCliente(e.target.value); setClienteSeleccionado(null); setMostrarClientes(true) }}
+                onFocus={() => setMostrarClientes(true)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              />
+              {mostrarClientes && busquedaCliente && (
+                <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 z-10 max-h-40 overflow-auto">
+                  {clientesFiltrados.slice(0, 5).map(c => (
+                    <button key={c.id} onClick={() => { setClienteSeleccionado(c); setBusquedaCliente(''); setMostrarClientes(false) }} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm">
+                      {c.nombres} {c.apellidos}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {clienteSeleccionado && (
+              <div className="mb-3 bg-blue-900 rounded-lg p-2 flex justify-between items-center">
+                <p className="text-xs text-blue-300">{clienteSeleccionado.nombres} {clienteSeleccionado.apellidos}</p>
+                <button onClick={() => setClienteSeleccionado(null)} className="text-blue-400 text-xs">X</button>
+              </div>
+            )}
+            <div className="space-y-2 mb-4">
+              {carrito.map((item) => (
+                <div key={item.id} className="flex items-center justify-between bg-gray-800 rounded-lg p-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{item.nombre}</p>
+                    <p className="text-xs text-gray-400">S/ {item.precio} x {item.cantidad}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-blue-400 font-bold text-sm">S/ {item.precio * item.cantidad}</span>
+                    <button onClick={() => quitarDelCarrito(item.id)} className="text-red-400 text-lg">x</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between font-bold text-lg mb-4">
+              <span>Total</span>
+              <span className="text-green-400">S/ {total}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {['efectivo', 'tarjeta', 'yape'].map((metodo) => (
+                <button key={metodo} onClick={() => setMetodoPago(metodo)} className={'py-2 rounded-lg text-xs font-medium ' + (metodoPago === metodo ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400')}>
+                  {metodo.charAt(0).toUpperCase() + metodo.slice(1)}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 mb-4">
+              <input type="checkbox" checked={cuotas} onChange={(e) => setCuotas(e.target.checked)} className="w-4 h-4" />
+              <span className="text-sm text-gray-300">Cuotas</span>
+              {cuotas && <input type="number" min={2} value={numeroCuotas} onChange={(e) => setNumeroCuotas(Number(e.target.value))} className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white" />}
+            </div>
+            <button onClick={cobrar} disabled={guardando} className={'w-full text-white py-4 rounded-lg font-bold text-lg ' + (guardando ? 'bg-gray-600' : 'bg-green-600 hover:bg-green-700')}>
+              {guardando ? 'Guardando...' : 'Cobrar S/ ' + total}
+            </button>
+          </div>
+        </div>
+      )}
+
       {mostrarEspecializada && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 overflow-auto py-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-2xl">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold">Venta especializada</h3>
               <button onClick={() => setMostrarEspecializada(false)} className="text-gray-400 hover:text-white text-xl">X</button>
@@ -441,7 +444,7 @@ export default function VentasDiarias() {
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="Buscar o escribir cliente..."
+                      placeholder="Buscar cliente..."
                       value={clienteEsp ? clienteEsp.nombres + ' ' + clienteEsp.apellidos : busquedaClienteEsp}
                       onChange={(e) => { setBusquedaClienteEsp(e.target.value); setClienteEsp(null); setMostrarClientesEsp(true); setVentaEsp({...ventaEsp, cliente: e.target.value}) }}
                       onFocus={() => setMostrarClientesEsp(true)}
@@ -466,7 +469,7 @@ export default function VentasDiarias() {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">RUC / DNI</label>
                   <input type="text" value={ventaEsp.ruc_dni} onChange={(e) => setVentaEsp({...ventaEsp, ruc_dni: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -475,16 +478,18 @@ export default function VentasDiarias() {
                   <label className="text-xs text-gray-400 mb-1 block">Ciudad</label>
                   <input type="text" value={ventaEsp.ciudad} onChange={(e) => setVentaEsp({...ventaEsp, ciudad: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Vendedor</label>
                   <input type="text" value={ventaEsp.vendedor} onChange={(e) => setVentaEsp({...ventaEsp, vendedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Monto S/</label>
                   <input type="number" value={ventaEsp.monto} onChange={(e) => setVentaEsp({...ventaEsp, monto: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Cantidad</label>
                   <input type="number" value={ventaEsp.cantidad} onChange={(e) => setVentaEsp({...ventaEsp, cantidad: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -508,7 +513,7 @@ export default function VentasDiarias() {
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Tipo de pago</label>
                   <select value={ventaEsp.tipo_pago} onChange={(e) => setVentaEsp({...ventaEsp, tipo_pago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
-                    <option value="directo">Directo / Contado</option>
+                    <option value="directo">Directo</option>
                     <option value="credito">Credito</option>
                   </select>
                 </div>
