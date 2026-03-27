@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Sidebar from '../../components/Sidebar'
-import { supabase } from '../../lib/supabase'
+import { supabase, getEmpresaId } from '../../lib/supabase'
 
 const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
@@ -15,31 +15,41 @@ export default function ControlVentas() {
   const [ventas, setVentas] = useState([])
   const [clientes, setClientes] = useState([])
   const [cargando, setCargando] = useState(true)
-  const [filtroMes, setFiltroMes] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [mostrarNueva, setMostrarNueva] = useState(false)
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [empresaId, setEmpresaId] = useState(null)
   const [busquedaCliente, setBusquedaCliente] = useState({})
   const [mostrarDropdown, setMostrarDropdown] = useState(null)
   const [filtros, setFiltros] = useState({
     mes: 'todos', cliente: '', ruc_dni: '', ciudad: '', vendedor: '',
-    monto: '', cantidad: '', facturado_por: '', fecha_venta: '',
-    guia_factura: '', comentarios: '', tipo_pago: '', status: ''
+    monto: '', tipo_pago: '', status: ''
   })
   const [nueva, setNueva] = useState({
-    mes: 'Marzo', cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0,
+    mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0,
     cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '',
     tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde'
   })
 
-  useEffect(() => { cargarDatos() }, [])
+  useEffect(() => { iniciar() }, [])
 
-  const cargarDatos = async () => {
+  const iniciar = async () => {
+    const eid = await getEmpresaId()
+    setEmpresaId(eid)
+    cargarDatos(eid)
+  }
+
+  const cargarDatos = async (eid) => {
     setCargando(true)
-    const { data: ventasData } = await supabase.from('ventas_especializadas').select('*').order('created_at', { ascending: false })
+    const ventasQuery = supabase.from('ventas_especializadas').select('*').order('created_at', { ascending: false })
+    if (eid) ventasQuery.eq('empresa_id', eid)
+    const { data: ventasData } = await ventasQuery
     setVentas(ventasData || [])
-    const { data: clientesData } = await supabase.from('pacientes').select('id, nombres, apellidos, dni, ciudad').order('nombres')
+
+    const clientesQuery = supabase.from('pacientes').select('id, nombres, apellidos, dni, ciudad').order('nombres')
+    if (eid) clientesQuery.eq('empresa_id', eid)
+    const { data: clientesData } = await clientesQuery
     setClientes(clientesData || [])
     setCargando(false)
   }
@@ -66,8 +76,6 @@ export default function ControlVentas() {
   const totalMonto = filtradas.reduce((sum, v) => sum + (v.monto || 0), 0)
   const totalCantidad = filtradas.reduce((sum, v) => sum + (v.cantidad || 0), 0)
 
-  const limpiarFiltros = () => setFiltros({ mes: 'todos', cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: '', cantidad: '', facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: '', status: '' })
-
   const editarCampo = async (id, campo, valor) => {
     setVentas(ventas.map(v => v.id === id ? { ...v, [campo]: valor } : v))
     await supabase.from('ventas_especializadas').update({ [campo]: valor }).eq('id', id)
@@ -82,11 +90,12 @@ export default function ControlVentas() {
   }
 
   const guardarNueva = async () => {
-    const { data, error } = await supabase.from('ventas_especializadas').insert([{ empresa_id: 'b2711600-fbf7-4f11-b699-8024e36c7cf5', ...nueva }]).select().single()
+    if (!empresaId) { alert('Error: no se encontro la empresa'); return }
+    const { data, error } = await supabase.from('ventas_especializadas').insert([{ empresa_id: empresaId, ...nueva }]).select().single()
     if (error) { alert('Error: ' + error.message); return }
     setVentas([data, ...ventas])
     setMostrarNueva(false)
-    setNueva({ mes: 'Marzo', cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde' })
+    setNueva({ mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde' })
   }
 
   const escapeCSV = (val) => {
@@ -98,8 +107,7 @@ export default function ControlVentas() {
   const descargarCSV = () => {
     const headers = ['Mes','Cliente','RUC/DNI','Ciudad','Vendedor','Monto','Cantidad','Facturado por','Fecha venta','Guia/Factura','Comentarios','Tipo pago','Cuotas','Fechas pago','Status']
     const rows = filtradas.map(v => [v.mes || '', v.cliente || '', v.ruc_dni || '', v.ciudad || '', v.vendedor || '', v.monto || 0, v.cantidad || 0, v.facturado_por || '', v.fecha_venta || '', v.guia_factura || '', v.comentarios || '', v.tipo_pago || '', v.num_cuotas || 0, v.fechas_pago || '', v.status || ''])
-    const totalRow = ['TOTAL', '', '', '', '', totalMonto, totalCantidad, '', '', '', '', '', '', '', '']
-    const csv = '\uFEFF' + [headers, ...rows, totalRow].map(r => r.map(escapeCSV).join(';')).join('\n')
+    const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -121,9 +129,7 @@ export default function ControlVentas() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className={'px-3 py-2 rounded-lg text-xs md:text-sm ' + (mostrarFiltros ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white')}>
-              🔍
-            </button>
+            <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className={'px-3 py-2 rounded-lg text-xs md:text-sm ' + (mostrarFiltros ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white')}>🔍</button>
             <button onClick={descargarCSV} className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs hidden md:block">⬇</button>
             <button onClick={() => setMostrarNueva(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Nueva</button>
           </div>
@@ -137,7 +143,6 @@ export default function ControlVentas() {
                 {meses.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
               <input placeholder="Cliente..." value={filtros.cliente} onChange={(e) => setFiltros({...filtros, cliente: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none" />
-              <input placeholder="RUC/DNI..." value={filtros.ruc_dni} onChange={(e) => setFiltros({...filtros, ruc_dni: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none" />
               <input placeholder="Ciudad..." value={filtros.ciudad} onChange={(e) => setFiltros({...filtros, ciudad: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none" />
               <input placeholder="Vendedor..." value={filtros.vendedor} onChange={(e) => setFiltros({...filtros, vendedor: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none" />
               <select value={filtros.tipo_pago} onChange={(e) => setFiltros({...filtros, tipo_pago: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none">
@@ -151,8 +156,8 @@ export default function ControlVentas() {
                 <option value="naranja">Naranja</option>
                 <option value="rojo">Rojo</option>
               </select>
+              <button onClick={() => setFiltros({ mes: 'todos', cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: '', tipo_pago: '', status: '' })} className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs">Limpiar</button>
             </div>
-            <button onClick={limpiarFiltros} className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded-lg text-xs">Limpiar filtros</button>
           </div>
         )}
 
@@ -221,7 +226,7 @@ export default function ControlVentas() {
                     <td className="px-2 py-2 border border-gray-700">
                       {v.tipo_pago === 'credito' ? <input type="number" value={v.num_cuotas || 0} onChange={(e) => editarCampo(v.id, 'num_cuotas', Number(e.target.value))} className="bg-transparent text-white text-xs w-12 focus:outline-none" /> : <span className="text-gray-500 text-xs">-</span>}
                     </td>
-                    <td className="px-2 py-2 border border-gray-700"><input value={v.fechas_pago || ''} onChange={(e) => editarCampo(v.id, 'fechas_pago', e.target.value)} placeholder="ej: 01/04" className="bg-transparent text-white text-xs w-full focus:outline-none min-w-28" /></td>
+                    <td className="px-2 py-2 border border-gray-700"><input value={v.fechas_pago || ''} onChange={(e) => editarCampo(v.id, 'fechas_pago', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" /></td>
                     <td className="px-2 py-2 border border-gray-700">
                       <select value={v.status || 'verde'} onChange={(e) => editarCampo(v.id, 'status', e.target.value)} className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusColors[v.status || 'verde']}>
                         <option value="verde">Verde</option>
