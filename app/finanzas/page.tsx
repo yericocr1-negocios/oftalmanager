@@ -18,6 +18,7 @@ export default function Finanzas() {
   const [cargando, setCargando] = useState(true)
   const [mostrarMov, setMostrarMov] = useState(false)
   const [mostrarPagar, setMostrarPagar] = useState(false)
+  const [mostrarCuota, setMostrarCuota] = useState(false)
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [empresaId, setEmpresaId] = useState(null)
@@ -27,6 +28,7 @@ export default function Finanzas() {
   const [filtroPagar, setFiltroPagar] = useState({ proveedor: '', tipo: '', producto: '', estado: '' })
   const [nuevoMov, setNuevoMov] = useState({ cliente: '', concepto: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0 })
   const [nuevoPagar, setNuevoPagar] = useState({ proveedor: '', tipoProveedor: '', fecha_venta: '', producto: '', total: 0, pagado: 0, pendiente: 0, fecha_vencimiento: '', estado: 'pendiente' })
+  const [nuevaCuota, setNuevaCuota] = useState({ cliente_nombre: '', numero_cuota: 1, monto: 0, fecha_vencimiento: '', estado: 'pendiente' })
 
   useEffect(() => { iniciar() }, [])
 
@@ -49,7 +51,6 @@ export default function Finanzas() {
     if (eid) cuotasQuery.eq('empresa_id', eid)
     const { data: cuotasDatos } = await cuotasQuery
     setCuotas(cuotasDatos || [])
-
     setCargando(false)
   }
 
@@ -91,6 +92,24 @@ export default function Finanzas() {
 
   const marcarCuotaPagada = async (id) => {
     await supabase.from('cuotas_pago').update({ estado: 'pagado' }).eq('id', id)
+    cargarDatos(empresaId, sedeId)
+  }
+
+  const guardarCuota = async () => {
+    if (!nuevaCuota.cliente_nombre) { alert('Ingresa el nombre del cliente'); return }
+    if (!nuevaCuota.monto) { alert('Ingresa el monto'); return }
+    if (!nuevaCuota.fecha_vencimiento) { alert('Ingresa la fecha de vencimiento'); return }
+    const { error } = await supabase.from('cuotas_pago').insert([{
+      empresa_id: empresaId,
+      cliente_nombre: nuevaCuota.cliente_nombre,
+      numero_cuota: nuevaCuota.numero_cuota,
+      monto: nuevaCuota.monto,
+      fecha_vencimiento: nuevaCuota.fecha_vencimiento,
+      estado: nuevaCuota.estado,
+    }])
+    if (error) { alert('Error: ' + error.message); return }
+    setMostrarCuota(false)
+    setNuevaCuota({ cliente_nombre: '', numero_cuota: 1, monto: 0, fecha_vencimiento: '', estado: 'pendiente' })
     cargarDatos(empresaId, sedeId)
   }
 
@@ -161,6 +180,7 @@ export default function Finanzas() {
             <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className={'px-3 md:px-4 py-2 rounded-lg text-sm ' + (mostrarFiltros ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white')}>🔍</button>
             <button onClick={descargar} className="bg-gray-700 hover:bg-gray-600 text-white px-3 md:px-4 py-2 rounded-lg text-sm hidden md:block">⬇ Descargar</button>
             {tab === 'caja' && <button onClick={() => setMostrarMov(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Movimiento</button>}
+            {tab === 'cuotas' && <button onClick={() => setMostrarCuota(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Cuota</button>}
             {tab === 'pagar' && <button onClick={() => setMostrarPagar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Cuenta</button>}
           </div>
         </div>
@@ -366,6 +386,50 @@ export default function Finanzas() {
           )}
         </div>
       </div>
+
+      {mostrarCuota && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold">Nueva cuota por cobrar</h3>
+              <button onClick={() => setMostrarCuota(false)} className="text-gray-400 hover:text-white text-xl">X</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Cliente</label>
+                <input type="text" value={nuevaCuota.cliente_nombre} onChange={(e) => setNuevaCuota({...nuevaCuota, cliente_nombre: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Numero de cuota</label>
+                  <input type="number" min={1} value={nuevaCuota.numero_cuota} onChange={(e) => setNuevaCuota({...nuevaCuota, numero_cuota: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Monto S/</label>
+                  <input type="number" value={nuevaCuota.monto} onChange={(e) => setNuevaCuota({...nuevaCuota, monto: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Fecha vencimiento</label>
+                  <input type="date" value={nuevaCuota.fecha_vencimiento} onChange={(e) => setNuevaCuota({...nuevaCuota, fecha_vencimiento: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Estado</label>
+                  <select value={nuevaCuota.estado} onChange={(e) => setNuevaCuota({...nuevaCuota, estado: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="pendiente">Pendiente</option>
+                    <option value="pagado">Pagado</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setMostrarCuota(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
+              <button onClick={guardarCuota} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar cuota</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {mostrarMov && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
