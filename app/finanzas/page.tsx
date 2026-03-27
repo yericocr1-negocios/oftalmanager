@@ -19,6 +19,7 @@ export default function Finanzas() {
   const [mostrarMov, setMostrarMov] = useState(false)
   const [mostrarPagar, setMostrarPagar] = useState(false)
   const [mostrarCuota, setMostrarCuota] = useState(false)
+  const [editandoCuota, setEditandoCuota] = useState<any>(null)
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [empresaId, setEmpresaId] = useState<string|null>(null)
@@ -124,6 +125,20 @@ export default function Finanzas() {
     if (error) { alert('Error: ' + error.message); return }
     setMostrarCuota(false)
     setNuevaCuota({ cliente_nombre: '', numero_cuota: 1, monto: 0, fecha_vencimiento: '', estado: 'pendiente' })
+    cargarDatos(empresaId, sedeId)
+  }
+
+  const guardarEdicionCuota = async () => {
+    if (!editandoCuota) return
+    const { error } = await supabase.from('cuotas_pago').update({
+      cliente_nombre: editandoCuota.cliente_nombre,
+      numero_cuota: editandoCuota.numero_cuota,
+      monto: editandoCuota.monto,
+      fecha_vencimiento: editandoCuota.fecha_vencimiento,
+      estado: editandoCuota.estado,
+    }).eq('id', editandoCuota.id)
+    if (error) { alert('Error: ' + error.message); return }
+    setEditandoCuota(null)
     cargarDatos(empresaId, sedeId)
   }
 
@@ -350,7 +365,8 @@ export default function Finanzas() {
                         <span className={'text-xs px-2 py-1 rounded-full ' + (c.estado === 'pagado' ? 'bg-green-900 text-green-400' : 'bg-yellow-900 text-yellow-400')}>{c.estado}</span>
                       </td>
                       <td className="px-4 py-3 flex gap-2">
-                        {c.estado !== 'pagado' && <button onClick={() => marcarCuotaPagada(c.id)} className="text-green-400 hover:text-green-300 text-xs">✓ Pagado</button>}
+                        {c.estado !== 'pagado' && <button onClick={() => marcarCuotaPagada(c.id)} className="text-green-400 hover:text-green-300 text-xs">✓</button>}
+                        <button onClick={() => setEditandoCuota({...c})} className="text-blue-400 hover:text-blue-300 text-xs">✏</button>
                         <button onClick={() => eliminarCuota(c.id)} className="text-red-400 hover:text-red-300 text-xs">🗑</button>
                       </td>
                     </tr>
@@ -407,6 +423,50 @@ export default function Finanzas() {
           )}
         </div>
       </div>
+
+      {editandoCuota && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold">Editar cuota</h3>
+              <button onClick={() => setEditandoCuota(null)} className="text-gray-400 hover:text-white text-xl">X</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Cliente</label>
+                <input type="text" value={editandoCuota.cliente_nombre} onChange={(e) => setEditandoCuota({...editandoCuota, cliente_nombre: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Numero de cuota</label>
+                  <input type="number" min={1} value={editandoCuota.numero_cuota} onChange={(e) => setEditandoCuota({...editandoCuota, numero_cuota: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Monto S/</label>
+                  <input type="number" value={editandoCuota.monto} onChange={(e) => setEditandoCuota({...editandoCuota, monto: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Fecha vencimiento</label>
+                  <input type="date" value={editandoCuota.fecha_vencimiento} onChange={(e) => setEditandoCuota({...editandoCuota, fecha_vencimiento: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Estado</label>
+                  <select value={editandoCuota.estado} onChange={(e) => setEditandoCuota({...editandoCuota, estado: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="pendiente">Pendiente</option>
+                    <option value="pagado">Pagado</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setEditandoCuota(null)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
+              <button onClick={guardarEdicionCuota} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar cambios</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {mostrarCuota && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
