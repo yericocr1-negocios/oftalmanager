@@ -1,9 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Sidebar from '../../components/Sidebar'
-import { supabase } from '../../lib/supabase'
-
-const EMPRESA_ID = 'b2711600-fbf7-4f11-b699-8024e36c7cf5'
+import { supabase, getEmpresaId } from '../../lib/supabase'
 
 const usuariosEjemplo = [
   { id: 1, nombre: 'Admin', email: 'corporacion.vortex1@gmail.com', rol: 'admin', activo: true },
@@ -19,28 +17,39 @@ export default function Configuracion() {
   const [cargando, setCargando] = useState(false)
   const [mostrarNuevoDoctor, setMostrarNuevoDoctor] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [empresaId, setEmpresaId] = useState(null)
   const [nuevoDoctor, setNuevoDoctor] = useState({
     nombres: '', apellidos: '', especialidad: '', telefono: '', email: '', activo: true
   })
 
-  useEffect(() => {
-    if (tab === 'doctores') cargarDoctores()
-  }, [tab])
+  useEffect(() => { iniciar() }, [])
 
-  const cargarDoctores = async () => {
+  const iniciar = async () => {
+    const eid = await getEmpresaId()
+    setEmpresaId(eid)
+    if (tab === 'doctores') cargarDoctores(eid)
+  }
+
+  useEffect(() => {
+    if (tab === 'doctores' && empresaId) cargarDoctores(empresaId)
+  }, [tab, empresaId])
+
+  const cargarDoctores = async (eid) => {
     setCargando(true)
-    const { data } = await supabase.from('doctores').select('*').order('nombres')
+    const query = supabase.from('doctores').select('*').order('nombres')
+    if (eid) query.eq('empresa_id', eid)
+    const { data } = await query
     setDoctores(data || [])
     setCargando(false)
   }
 
   const guardarDoctor = async () => {
     if (!nuevoDoctor.nombres || !nuevoDoctor.apellidos) { alert('Nombres y apellidos son obligatorios'); return }
-    const { error } = await supabase.from('doctores').insert([{ ...nuevoDoctor, empresa_id: EMPRESA_ID }])
+    const { error } = await supabase.from('doctores').insert([{ ...nuevoDoctor, empresa_id: empresaId }])
     if (error) { alert('Error: ' + error.message); return }
     setMostrarNuevoDoctor(false)
     setNuevoDoctor({ nombres: '', apellidos: '', especialidad: '', telefono: '', email: '', activo: true })
-    cargarDoctores()
+    cargarDoctores(empresaId)
   }
 
   const toggleActivo = async (id, activo) => {
@@ -125,9 +134,7 @@ export default function Configuracion() {
                 <div className="text-center text-gray-400 py-12">
                   <p className="text-4xl mb-4">👨‍⚕️</p>
                   <p className="text-sm mb-4">No hay doctores registrados</p>
-                  <button onClick={() => setMostrarNuevoDoctor(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
-                    + Agregar doctor
-                  </button>
+                  <button onClick={() => setMostrarNuevoDoctor(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Agregar doctor</button>
                 </div>
               ) : (
                 <div>
@@ -180,9 +187,7 @@ export default function Configuracion() {
                             </span>
                           </td>
                           <td className="px-6 py-4 flex gap-3">
-                            <button onClick={() => toggleActivo(d.id, d.activo)} className="text-blue-400 hover:text-blue-300 text-xs">
-                              {d.activo ? 'Desactivar' : 'Activar'}
-                            </button>
+                            <button onClick={() => toggleActivo(d.id, d.activo)} className="text-blue-400 hover:text-blue-300 text-xs">{d.activo ? 'Desactivar' : 'Activar'}</button>
                             <button onClick={() => eliminarDoctor(d.id)} className="text-red-400 hover:text-red-300 text-xs">Eliminar</button>
                           </td>
                         </tr>
