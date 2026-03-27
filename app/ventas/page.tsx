@@ -4,57 +4,33 @@ import { supabase, getEmpresaId, getSedeId } from '../../lib/supabase'
 import Sidebar from '../../components/Sidebar'
 
 const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
-
-const productosDisponibles = [
-  { id: 1, nombre: 'Consulta General', precio: 80, categoria: 'Servicio' },
-  { id: 2, nombre: 'Consulta Especializada', precio: 120, categoria: 'Servicio' },
-  { id: 3, nombre: 'Consulta de Contactologia', precio: 100, categoria: 'Servicio' },
-  { id: 4, nombre: 'Topografia Corneal', precio: 150, categoria: 'Examen' },
-  { id: 5, nombre: 'Campo Visual', precio: 120, categoria: 'Examen' },
-  { id: 6, nombre: 'OCT Retina', precio: 200, categoria: 'Examen' },
-  { id: 7, nombre: 'Ecografia Ocular', precio: 180, categoria: 'Examen' },
-  { id: 8, nombre: 'Montura Ray-Ban', precio: 350, categoria: 'Montura' },
-  { id: 9, nombre: 'Montura Oakley', precio: 420, categoria: 'Montura' },
-  { id: 10, nombre: 'Montura Economica', precio: 80, categoria: 'Montura' },
-  { id: 11, nombre: 'Luna Antireflex Simple', precio: 180, categoria: 'Luna' },
-  { id: 12, nombre: 'Luna Antireflex Premium', precio: 280, categoria: 'Luna' },
-  { id: 13, nombre: 'Luna Fotocrom', precio: 320, categoria: 'Luna' },
-  { id: 14, nombre: 'Luna Blue Cut', precio: 250, categoria: 'Luna' },
-  { id: 15, nombre: 'Lente de Contacto Diario', precio: 85, categoria: 'Contacto' },
-  { id: 16, nombre: 'Lente de Contacto Mensual', precio: 150, categoria: 'Contacto' },
-  { id: 17, nombre: 'Solucion para Lentes', precio: 35, categoria: 'Contacto' },
-  { id: 18, nombre: 'Cirugia Catarata', precio: 2500, categoria: 'Cirugia' },
-  { id: 19, nombre: 'Cirugia Lasik', precio: 3500, categoria: 'Cirugia' },
-  { id: 20, nombre: 'Cirugia Pterigion', precio: 1200, categoria: 'Cirugia' },
-  { id: 21, nombre: 'Colirio Lubricante', precio: 35, categoria: 'Medicamento' },
-  { id: 22, nombre: 'Gotas Antiinflamatorias', precio: 55, categoria: 'Medicamento' },
-  { id: 23, nombre: 'Vitaminas Oculares', precio: 80, categoria: 'Medicamento' },
-]
-
-const categorias = ['Servicio', 'Examen', 'Montura', 'Luna', 'Contacto', 'Cirugia', 'Medicamento']
 const getMesActual = () => meses[new Date().getMonth()]
 
 export default function VentasDiarias() {
-  const [empresaId, setEmpresaId] = useState(null)
-  const [sedeId, setSedeId] = useState(null)
-  const [carrito, setCarrito] = useState([])
-  const [clientes, setClientes] = useState([])
-  const [clienteSeleccionado, setClienteSeleccionado] = useState(null)
+  const [empresaId, setEmpresaId] = useState<string|null>(null)
+  const [sedeId, setSedeId] = useState<string|null>(null)
+  const [carrito, setCarrito] = useState<any[]>([])
+  const [clientes, setClientes] = useState<any[]>([])
+  const [productos, setProductos] = useState<any[]>([])
+  const [categorias, setCategorias] = useState<string[]>([])
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
   const [busquedaCliente, setBusquedaCliente] = useState('')
   const [mostrarClientes, setMostrarClientes] = useState(false)
   const [metodoPago, setMetodoPago] = useState('efectivo')
   const [busqueda, setBusqueda] = useState('')
   const [categoriaFiltro, setCategoriaFiltro] = useState('todos')
   const [mostrarEspecializada, setMostrarEspecializada] = useState(false)
+  const [mostrarNuevoProducto, setMostrarNuevoProducto] = useState(false)
   const [cuotas, setCuotas] = useState(false)
   const [numeroCuotas, setNumeroCuotas] = useState(2)
   const [guardando, setGuardando] = useState(false)
   const [guardandoEsp, setGuardandoEsp] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [mostrarCarrito, setMostrarCarrito] = useState(false)
-  const [clienteEsp, setClienteEsp] = useState(null)
+  const [clienteEsp, setClienteEsp] = useState<any>(null)
   const [busquedaClienteEsp, setBusquedaClienteEsp] = useState('')
   const [mostrarClientesEsp, setMostrarClientesEsp] = useState(false)
+  const [nuevoProducto, setNuevoProducto] = useState({ nombre: '', precio: 0, categoria: '' })
   const [ventaEsp, setVentaEsp] = useState({
     mes: getMesActual(), cliente: '', ruc_dni: '', ciudad: '', vendedor: '',
     monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '',
@@ -70,13 +46,45 @@ export default function VentasDiarias() {
     setEmpresaId(eid)
     setSedeId(sid)
     cargarClientes(eid)
+    cargarProductos(eid)
   }
 
-  const cargarClientes = async (eid) => {
+  const cargarClientes = async (eid: string|null) => {
     const query = supabase.from('pacientes').select('id, nombres, apellidos, dni, telefono, ciudad').order('nombres')
     if (eid) query.eq('empresa_id', eid)
     const { data } = await query
     setClientes(data || [])
+  }
+
+  const cargarProductos = async (eid: string|null) => {
+    const query = supabase.from('productos').select('*').order('categoria').order('nombre')
+    if (eid) query.eq('empresa_id', eid)
+    const { data } = await query
+    setProductos(data || [])
+    const cats = [...new Set((data || []).map((p: any) => p.categoria).filter(Boolean))] as string[]
+    setCategorias(cats)
+  }
+
+  const guardarNuevoProducto = async () => {
+    if (!nuevoProducto.nombre) { alert('El nombre es obligatorio'); return }
+    const { data, error } = await supabase.from('productos').insert([{
+      nombre: nuevoProducto.nombre,
+      precio: nuevoProducto.precio,
+      categoria: nuevoProducto.categoria || 'General',
+      empresa_id: empresaId,
+      stock: 0, minimo: 0, costo: 0, margen: 0, unidad: 'unidad'
+    }]).select().single()
+    if (error) { alert('Error: ' + error.message); return }
+    setProductos([...productos, data])
+    if (data.categoria && !categorias.includes(data.categoria)) setCategorias([...categorias, data.categoria])
+    setMostrarNuevoProducto(false)
+    setNuevoProducto({ nombre: '', precio: 0, categoria: '' })
+  }
+
+  const eliminarProducto = async (id: string) => {
+    if (!confirm('¿Eliminar este producto del catalogo?')) return
+    await supabase.from('productos').delete().eq('id', id)
+    setProductos(productos.filter(p => p.id !== id))
   }
 
   const clientesFiltrados = clientes.filter(c =>
@@ -89,13 +97,13 @@ export default function VentasDiarias() {
     (c.dni || '').includes(busquedaClienteEsp)
   )
 
-  const productosFiltrados = productosDisponibles.filter(p => {
-    const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+  const productosFiltrados = productos.filter(p => {
+    const coincideBusqueda = (p.nombre || '').toLowerCase().includes(busqueda.toLowerCase())
     const coincideCategoria = categoriaFiltro === 'todos' || p.categoria === categoriaFiltro
     return coincideBusqueda && coincideCategoria
   })
 
-  const agregarAlCarrito = (producto) => {
+  const agregarAlCarrito = (producto: any) => {
     const existente = carrito.find(item => item.id === producto.id)
     if (existente) {
       setCarrito(carrito.map(item => item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item))
@@ -105,11 +113,11 @@ export default function VentasDiarias() {
     setMostrarCarrito(true)
   }
 
-  const quitarDelCarrito = (id) => setCarrito(carrito.filter(item => item.id !== id))
+  const quitarDelCarrito = (id: string) => setCarrito(carrito.filter(item => item.id !== id))
   const subtotal = carrito.reduce((sum, item) => sum + item.precio * item.cantidad, 0)
   const total = subtotal
 
-  const generarFechasCuotas = (numCuotas) => {
+  const generarFechasCuotas = (numCuotas: number) => {
     const fechas = []
     const hoy = new Date()
     for (let i = 1; i <= numCuotas; i++) {
@@ -130,17 +138,14 @@ export default function VentasDiarias() {
       ? clienteSeleccionado.nombres + ' ' + clienteSeleccionado.apellidos
       : busquedaCliente
 
-    const { data: ventaData, error } = await supabase
-      .from('ventas')
-      .insert([{
-        empresa_id: empresaId, sede_id: sedeId,
-        paciente_id: clienteSeleccionado ? clienteSeleccionado.id : null,
-        subtotal, total, metodo_pago: metodoPago,
-        estado: 'pagado', notas: nombreCliente,
-        tipo_comprobante: 'boleta', cliente_nombre: nombreCliente,
-        num_cuotas: cuotas ? numeroCuotas : 0,
-      }])
-      .select().single()
+    const { data: ventaData, error } = await supabase.from('ventas').insert([{
+      empresa_id: empresaId, sede_id: sedeId,
+      paciente_id: clienteSeleccionado ? clienteSeleccionado.id : null,
+      subtotal, total, metodo_pago: metodoPago,
+      estado: 'pagado', notas: nombreCliente,
+      tipo_comprobante: 'boleta', cliente_nombre: nombreCliente,
+      num_cuotas: cuotas ? numeroCuotas : 0,
+    }]).select().single()
 
     if (error) { alert('Error: ' + error.message); setGuardando(false); return }
 
@@ -154,7 +159,7 @@ export default function VentasDiarias() {
 
     await supabase.from('caja').insert([{
       sede_id: sedeId, tipo: 'ingreso',
-      concepto: 'Venta - ' + carrito.map(i => i.nombre).join(', '),
+      concepto: 'Venta - ' + carrito.map((i: any) => i.nombre).join(', '),
       monto: total, metodo_pago: metodoPago,
       venta_id: ventaData.id, cliente_nombre: nombreCliente,
       fecha: new Date().toISOString(),
@@ -217,6 +222,8 @@ export default function VentasDiarias() {
     setBusquedaClienteEsp('')
   }
 
+  const categoriasUnicas = ['todos', ...categorias]
+
   return (
     <div className="flex h-screen bg-gray-950 text-white">
       <Sidebar menuAbierto={menuAbierto} setMenuAbierto={setMenuAbierto} />
@@ -230,7 +237,8 @@ export default function VentasDiarias() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setMostrarEspecializada(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Especializada</button>
+            <button onClick={() => setMostrarNuevoProducto(true)} className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs hidden md:block">+ Producto</button>
+            <button onClick={() => setMostrarEspecializada(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Venta especializada</button>
             {carrito.length > 0 && (
               <button onClick={() => setMostrarCarrito(true)} className="md:hidden bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">
                 🛒 {carrito.length} — S/ {total}
@@ -245,29 +253,62 @@ export default function VentasDiarias() {
               <input type="text" placeholder="Buscar producto..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
             </div>
             <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
-              {['todos', ...categorias].map((cat) => (
+              {categoriasUnicas.map((cat) => (
                 <button key={cat} onClick={() => setCategoriaFiltro(cat)} className={'px-3 py-1 rounded-lg text-xs transition-all whitespace-nowrap ' + (categoriaFiltro === cat ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
                   {cat === 'todos' ? 'Todos' : cat}
                 </button>
               ))}
             </div>
-            {categorias.filter(cat => categoriaFiltro === 'todos' || cat === categoriaFiltro).map((cat) => {
-              const prods = productosFiltrados.filter(p => p.categoria === cat)
-              if (prods.length === 0) return null
-              return (
-                <div key={cat} className="mb-4 md:mb-6">
-                  <h3 className="text-xs text-gray-400 uppercase mb-2 md:mb-3">{cat}</h3>
-                  <div className="grid grid-cols-2 gap-2 md:gap-3">
-                    {prods.map((producto) => (
-                      <button key={producto.id} onClick={() => agregarAlCarrito(producto)} className="bg-gray-900 border border-gray-800 hover:border-blue-500 rounded-xl p-3 md:p-4 text-left transition-all">
-                        <p className="text-xs md:text-sm font-medium leading-tight">{producto.nombre}</p>
-                        <p className="text-blue-400 font-bold mt-1 text-sm">S/ {producto.precio}</p>
-                      </button>
-                    ))}
+
+            {productos.length === 0 ? (
+              <div className="text-center text-gray-400 py-12">
+                <p className="text-4xl mb-4">📦</p>
+                <p className="text-sm mb-4">No hay productos en el catalogo</p>
+                <button onClick={() => setMostrarNuevoProducto(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Agregar primer producto</button>
+              </div>
+            ) : (
+              categorias.filter(cat => categoriaFiltro === 'todos' || cat === categoriaFiltro).map((cat) => {
+                const prods = productosFiltrados.filter(p => p.categoria === cat)
+                if (prods.length === 0) return null
+                return (
+                  <div key={cat} className="mb-4 md:mb-6">
+                    <h3 className="text-xs text-gray-400 uppercase mb-2 md:mb-3">{cat}</h3>
+                    <div className="grid grid-cols-2 gap-2 md:gap-3">
+                      {prods.map((producto: any) => (
+                        <div key={producto.id} className="bg-gray-900 border border-gray-800 hover:border-blue-500 rounded-xl p-3 md:p-4 transition-all">
+                          <div className="flex justify-between items-start mb-1">
+                            <p className="text-xs md:text-sm font-medium leading-tight flex-1">{producto.nombre}</p>
+                            <button onClick={() => eliminarProducto(producto.id)} className="text-gray-600 hover:text-red-400 text-xs ml-1 flex-shrink-0">✕</button>
+                          </div>
+                          <p className="text-blue-400 font-bold text-sm mb-2">S/ {producto.precio}</p>
+                          <button onClick={() => agregarAlCarrito(producto)} className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-1 rounded-lg">
+                            + Agregar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                )
+              })
+            )}
+
+            {categoriaFiltro === 'todos' && productosFiltrados.filter(p => !p.categoria).length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-xs text-gray-400 uppercase mb-2">Sin categoria</h3>
+                <div className="grid grid-cols-2 gap-2 md:gap-3">
+                  {productosFiltrados.filter(p => !p.categoria).map((producto: any) => (
+                    <div key={producto.id} className="bg-gray-900 border border-gray-800 hover:border-blue-500 rounded-xl p-3 md:p-4 transition-all">
+                      <div className="flex justify-between items-start mb-1">
+                        <p className="text-xs md:text-sm font-medium leading-tight flex-1">{producto.nombre}</p>
+                        <button onClick={() => eliminarProducto(producto.id)} className="text-gray-600 hover:text-red-400 text-xs ml-1">✕</button>
+                      </div>
+                      <p className="text-blue-400 font-bold text-sm mb-2">S/ {producto.precio}</p>
+                      <button onClick={() => agregarAlCarrito(producto)} className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-1 rounded-lg">+ Agregar</button>
+                    </div>
+                  ))}
                 </div>
-              )
-            })}
+              </div>
+            )}
           </div>
 
           <div className="hidden md:flex w-80 bg-gray-900 border-l border-gray-800 flex-col">
@@ -338,6 +379,37 @@ export default function VentasDiarias() {
           </div>
         </div>
       </div>
+
+      {mostrarNuevoProducto && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold">Nuevo producto al catalogo</h3>
+              <button onClick={() => setMostrarNuevoProducto(false)} className="text-gray-400 hover:text-white text-xl">X</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Nombre del producto / servicio</label>
+                <input type="text" value={nuevoProducto.nombre} onChange={(e) => setNuevoProducto({...nuevoProducto, nombre: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Precio S/</label>
+                  <input type="number" value={nuevoProducto.precio} onChange={(e) => setNuevoProducto({...nuevoProducto, precio: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Categoria</label>
+                  <input type="text" value={nuevoProducto.categoria} onChange={(e) => setNuevoProducto({...nuevoProducto, categoria: e.target.value})} placeholder="ej: Servicio, Luna..." className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setMostrarNuevoProducto(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
+              <button onClick={guardarNuevoProducto} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {mostrarCarrito && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-end justify-center z-50 md:hidden">
@@ -417,15 +489,18 @@ export default function VentasDiarias() {
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Cliente</label>
                   <div className="relative">
-                    <input type="text" placeholder="Buscar cliente..." value={clienteEsp ? clienteEsp.nombres + ' ' + clienteEsp.apellidos : busquedaClienteEsp} onChange={(e) => { setBusquedaClienteEsp(e.target.value); setClienteEsp(null); setMostrarClientesEsp(true); setVentaEsp({...ventaEsp, cliente: e.target.value}) }} onFocus={() => setMostrarClientesEsp(true)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    <input type="text" placeholder="Buscar cliente registrado..." value={clienteEsp ? clienteEsp.nombres + ' ' + clienteEsp.apellidos : busquedaClienteEsp} onChange={(e) => { setBusquedaClienteEsp(e.target.value); setClienteEsp(null); setMostrarClientesEsp(true); setVentaEsp({...ventaEsp, cliente: e.target.value}) }} onFocus={() => setMostrarClientesEsp(true)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                     {mostrarClientesEsp && busquedaClienteEsp && (
                       <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 z-20 max-h-36 overflow-auto">
-                        {clientesEspFiltrados.slice(0, 4).map(c => (
+                        {clientesEspFiltrados.slice(0, 5).map((c: any) => (
                           <button key={c.id} onClick={() => { setClienteEsp(c); setBusquedaClienteEsp(''); setMostrarClientesEsp(false); setVentaEsp({...ventaEsp, cliente: c.nombres + ' ' + c.apellidos, ruc_dni: c.dni || '', ciudad: c.ciudad || ''}) }} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs">
                             <p>{c.nombres} {c.apellidos}</p>
-                            <p className="text-gray-400">{c.dni || '-'}</p>
+                            <p className="text-gray-400">{c.dni || '-'} — {c.ciudad || '-'}</p>
                           </button>
                         ))}
+                        <button onClick={() => setMostrarClientesEsp(false)} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs text-blue-400 border-t border-gray-700">
+                          + Usar "{busquedaClienteEsp}" sin registrar
+                        </button>
                       </div>
                     )}
                   </div>
