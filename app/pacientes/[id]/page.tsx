@@ -6,16 +6,18 @@ import Sidebar from '../../../components/Sidebar'
 const campoVacio = { esferico: '', cilindro: '', eje: '', av_cc: '', dip: '', altura: '' }
 
 export default function PerfilPaciente({ params }: { params: { id: string } }) {
-  const [paciente, setPaciente] = useState(null)
+  const [paciente, setPaciente] = useState<any>(null)
   const [tab, setTab] = useState('datos')
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
-  const [compras, setCompras] = useState([])
-  const [citas, setCitas] = useState([])
+  const [compras, setCompras] = useState<any[]>([])
+  const [citas, setCitas] = useState<any[]>([])
+  const [doctores, setDoctores] = useState<any[]>([])
   const [menuAbierto, setMenuAbierto] = useState(false)
-  const [empresaId, setEmpresaId] = useState(null)
-  const [historiaId, setHistoriaId] = useState(null)
+  const [empresaId, setEmpresaId] = useState<string|null>(null)
+  const [historiaId, setHistoriaId] = useState<string|null>(null)
   const [doctor, setDoctor] = useState('')
+  const [doctorTextoLibre, setDoctorTextoLibre] = useState(false)
   const [fecha, setFecha] = useState('')
   const [tipoPrescripcion, setTipoPrescripcion] = useState('')
   const [razonConsulta, setRazonConsulta] = useState('')
@@ -25,7 +27,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   const [historiaOcular, setHistoriaOcular] = useState('')
   const [historialFamiliar, setHistorialFamiliar] = useState('')
   const [comentarios, setComentarios] = useState('')
-  const [antecedentes, setAntecedentes] = useState([])
+  const [antecedentes, setAntecedentes] = useState<string[]>([])
   const [otroAntecedente, setOtroAntecedente] = useState('')
   const [adicionMedia, setAdicionMedia] = useState('')
   const [lejosOD, setLejosOD] = useState({...campoVacio})
@@ -38,7 +40,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
 
   const antecedentesOpciones = ['Catarata', 'Glaucoma', 'Traumatismo ocular', 'Hipertension', 'Diabetes melitus', 'Otro']
 
-  const toggleAntecedente = (opcion) => {
+  const toggleAntecedente = (opcion: string) => {
     if (antecedentes.includes(opcion)) {
       setAntecedentes(antecedentes.filter(a => a !== opcion))
     } else {
@@ -51,16 +53,25 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     iniciar(id)
   }, [])
 
-  const iniciar = async (id) => {
+  const iniciar = async (id: string | undefined) => {
+    if (!id) return
     const eid = await getEmpresaId()
     setEmpresaId(eid)
     cargarPaciente(id)
     cargarCompras(id)
     cargarCitas(id)
     cargarHistoria(id)
+    cargarDoctores(eid)
   }
 
-  const cargarPaciente = async (id) => {
+  const cargarDoctores = async (eid: string|null) => {
+    const query = supabase.from('doctores').select('*').eq('activo', true).order('nombres')
+    if (eid) query.eq('empresa_id', eid)
+    const { data } = await query
+    setDoctores(data || [])
+  }
+
+  const cargarPaciente = async (id: string) => {
     setCargando(true)
     const { data } = await supabase.from('pacientes').select('*').eq('id', id).single()
     setPaciente(data)
@@ -68,7 +79,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     setCargando(false)
   }
 
-  const cargarHistoria = async (id) => {
+  const cargarHistoria = async (id: string) => {
     const { data } = await supabase.from('historias_clinicas').select('*').eq('paciente_id', id).order('created_at', { ascending: false }).limit(1).single()
     if (data) {
       setHistoriaId(data.id)
@@ -94,12 +105,12 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     }
   }
 
-  const cargarCompras = async (id) => {
+  const cargarCompras = async (id: string) => {
     const { data } = await supabase.from('ventas').select('*, ventas_detalle(*)').eq('paciente_id', id).order('created_at', { ascending: false })
     setCompras(data || [])
   }
 
-  const cargarCitas = async (id) => {
+  const cargarCitas = async (id: string) => {
     const { data } = await supabase.from('citas').select('*').eq('paciente_id', id).order('fecha', { ascending: false })
     setCitas(data || [])
   }
@@ -117,8 +128,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     setGuardando(true)
 
     const payload = {
-      paciente_id: id,
-      empresa_id: empresaId,
+      paciente_id: id, empresa_id: empresaId,
       doctor, fecha, tipo_prescripcion: tipoPrescripcion,
       razon_consulta: razonConsulta, sintomatologia, diagnostico,
       tratamiento, historia_ocular: historiaOcular,
@@ -131,7 +141,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
       updated_at: new Date().toISOString(),
     }
 
-    let error
+    let error: any
     if (historiaId) {
       const { error: e } = await supabase.from('historias_clinicas').update(payload).eq('id', historiaId)
       error = e
@@ -146,12 +156,12 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     alert('Historia clinica guardada correctamente')
   }
 
-  const cambiarEstadoVenta = async (ventaId, nuevoEstado) => {
+  const cambiarEstadoVenta = async (ventaId: string, nuevoEstado: string) => {
     await supabase.from('ventas').update({ estado: nuevoEstado }).eq('id', ventaId)
     setCompras(compras.map(v => v.id === ventaId ? { ...v, estado: nuevoEstado } : v))
   }
 
-  const escapeCSV = (val) => {
+  const escapeCSV = (val: any) => {
     const str = String(val === null || val === undefined ? '' : val)
     if (str.includes(';') || str.includes('"') || str.includes('\n')) return '"' + str.replace(/"/g, '""') + '"'
     return str
@@ -159,7 +169,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
 
   const descargar = () => {
     if (!paciente) return
-    let headers, rows, filename
+    let headers: string[], rows: any[][], filename: string
     if (tab === 'datos') {
       headers = ['Campo', 'Valor']
       rows = Object.entries(datosPaciente).map(([k, v]) => [k, v])
@@ -170,7 +180,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
       filename = 'historia-' + paciente.nombres + '.csv'
     } else if (tab === 'compras') {
       headers = ['Fecha', 'Productos', 'Metodo', 'Total', 'Estado']
-      rows = compras.map(v => [new Date(v.created_at).toLocaleDateString('es-PE'), v.ventas_detalle?.map(d => d.cantidad + 'x ' + (d.nombre_producto || 'Producto')).join(' | ') || '', v.metodo_pago || '', v.total || 0, v.estado || ''])
+      rows = compras.map(v => [new Date(v.created_at).toLocaleDateString('es-PE'), v.ventas_detalle?.map((d: any) => d.cantidad + 'x ' + (d.nombre_producto || 'Producto')).join(' | ') || '', v.metodo_pago || '', v.total || 0, v.estado || ''])
       filename = 'compras-' + paciente.nombres + '.csv'
     } else {
       headers = ['Fecha', 'Hora', 'Doctor', 'Especialidad', 'Estado']
@@ -186,11 +196,11 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     a.click()
   }
 
-  const InputCampo = ({ label, value, onChange }) => (
+  const InputCampo = ({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) => (
     <input type="text" placeholder={label} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 text-center" />
   )
 
-  const FilaOjo = ({ ojo, data, setData, conAdicion }) => (
+  const FilaOjo = ({ ojo, data, setData, conAdicion }: { ojo: string, data: any, setData: any, conAdicion: boolean }) => (
     <tr className="border-b border-gray-700">
       <td className="px-3 py-2 text-xs text-gray-400 font-medium whitespace-nowrap">{ojo}</td>
       <td className="px-1 py-2"><InputCampo label="+/-" value={data.esferico} onChange={(v) => setData({...data, esferico: v})} /></td>
@@ -203,7 +213,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     </tr>
   )
 
-  const TablaVision = ({ titulo, od, setOd, oi, setOi, conAdicion }) => (
+  const TablaVision = ({ titulo, od, setOd, oi, setOi, conAdicion }: { titulo: string, od: any, setOd: any, oi: any, setOi: any, conAdicion: boolean }) => (
     <div className="mb-4 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
       <div className="px-4 py-2 bg-gray-700 border-b border-gray-600">
         <h4 className="text-sm font-medium text-blue-400">{titulo}</h4>
@@ -293,7 +303,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                 ].map((campo) => (
                   <div key={campo.key}>
                     <label className="text-xs text-gray-400 mb-1 block">{campo.label}</label>
-                    <input type="text" value={datosPaciente[campo.key]} onChange={(e) => setDatosPaciente({...datosPaciente, [campo.key]: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    <input type="text" value={datosPaciente[campo.key as keyof typeof datosPaciente]} onChange={(e) => setDatosPaciente({...datosPaciente, [campo.key]: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                 ))}
                 <div className="col-span-1 md:col-span-2">
@@ -311,8 +321,22 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                 <h3 className="font-semibold mb-4">Informacion general</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-xs text-gray-400 mb-1 block">Doctor / Optometra</label>
-                    <input type="text" value={doctor} onChange={(e) => setDoctor(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-xs text-gray-400">Doctor / Optometra</label>
+                      <button onClick={() => setDoctorTextoLibre(!doctorTextoLibre)} className="text-xs text-blue-400 hover:text-blue-300">
+                        {doctorTextoLibre ? 'Elegir de lista' : 'Texto libre'}
+                      </button>
+                    </div>
+                    {doctorTextoLibre || doctores.length === 0 ? (
+                      <input type="text" value={doctor} onChange={(e) => setDoctor(e.target.value)} placeholder="Nombre del doctor..." className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                    ) : (
+                      <select value={doctor} onChange={(e) => setDoctor(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                        <option value="">Seleccionar doctor...</option>
+                        {doctores.map(d => (
+                          <option key={d.id} value={d.nombres + ' ' + d.apellidos}>{d.nombres} {d.apellidos}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Fecha</label>
@@ -349,7 +373,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                 ].map((campo) => (
                   <div key={campo.label}>
                     <label className="text-xs text-gray-400 mb-1 block">{campo.label}</label>
-                    <textarea value={campo.value} onChange={(e) => campo.set(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20" />
+                    <textarea value={campo.value} onChange={(e) => campo.set(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-20 resize-y" />
                   </div>
                 ))}
               </div>
@@ -403,7 +427,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                         <td className="px-6 py-4">
                           {v.ventas_detalle && v.ventas_detalle.length > 0 ? (
                             <div className="space-y-1">
-                              {v.ventas_detalle.map((d, i) => (
+                              {v.ventas_detalle.map((d: any, i: number) => (
                                 <p key={i} className="text-xs text-gray-200">{d.cantidad}x <span className="text-white font-medium">{d.nombre_producto || 'Producto'}</span></p>
                               ))}
                             </div>
