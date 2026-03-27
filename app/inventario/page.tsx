@@ -4,21 +4,20 @@ import Sidebar from '../../components/Sidebar'
 import { supabase, getEmpresaId } from '../../lib/supabase'
 
 export default function Inventario() {
-  const [productos, setProductos] = useState([])
-  const [categorias, setCategorias] = useState([])
+  const [productos, setProductos] = useState<any[]>([])
+  const [categorias, setCategorias] = useState<any[]>([])
   const [busqueda, setBusqueda] = useState('')
   const [filtro, setFiltro] = useState('todos')
   const [tab, setTab] = useState('productos')
-  const [productoSeleccionado, setProductoSeleccionado] = useState(null)
+  const [productoSeleccionado, setProductoSeleccionado] = useState<any>(null)
   const [mostrarNuevo, setMostrarNuevo] = useState(false)
   const [nuevaCategoria, setNuevaCategoria] = useState('')
+  const [editandoCategoria, setEditandoCategoria] = useState<any>(null)
   const [menuAbierto, setMenuAbierto] = useState(false)
-  const [empresaId, setEmpresaId] = useState(null)
+  const [empresaId, setEmpresaId] = useState<string|null>(null)
   const [cargando, setCargando] = useState(true)
   const [nuevoProducto, setNuevoProducto] = useState({
-    codigo: '', nombre: '', categoria: '', familia: '', modelo: '', material: '',
-    color: '', talla: '', stock: 0, minimo: 5, costo: 0, precio: 0,
-    unidad: 'unidad', codigoBarras: '', detraccion: false
+    codigo: '', nombre: '', categoria: '', stock: 0, minimo: 5, costo: 0, precio: 0, unidad: 'unidad'
   })
 
   useEffect(() => { iniciar() }, [])
@@ -29,7 +28,7 @@ export default function Inventario() {
     cargarDatos(eid)
   }
 
-  const cargarDatos = async (eid) => {
+  const cargarDatos = async (eid: string|null) => {
     setCargando(true)
     const prodQuery = supabase.from('productos').select('*').order('nombre')
     if (eid) prodQuery.eq('empresa_id', eid)
@@ -39,13 +38,13 @@ export default function Inventario() {
     const catQuery = supabase.from('categorias_productos').select('*').order('nombre')
     if (eid) catQuery.eq('empresa_id', eid)
     const { data: catData } = await catQuery
-    setCategorias(catData?.map(c => c.nombre) || [])
+    setCategorias(catData || [])
     setCargando(false)
   }
 
   const filtrados = productos.filter(p => {
     const coincideBusqueda = (p.nombre || '').toLowerCase().includes(busqueda.toLowerCase()) || (p.codigo || '').toLowerCase().includes(busqueda.toLowerCase())
-    const coincideFiltro = filtro === 'todos' || (filtro === 'bajo' && p.stock <= p.minimo) || p.categoria === filtro
+    const coincideFiltro = filtro === 'todos' || (filtro === 'bajo' && (p.stock || 0) <= (p.minimo || 0)) || p.categoria === filtro
     return coincideBusqueda && coincideFiltro
   })
 
@@ -56,23 +55,38 @@ export default function Inventario() {
     if (error) { alert('Error: ' + error.message); return }
     setProductos([...productos, data])
     setMostrarNuevo(false)
-    setNuevoProducto({ codigo: '', nombre: '', categoria: '', familia: '', modelo: '', material: '', color: '', talla: '', stock: 0, minimo: 5, costo: 0, precio: 0, unidad: 'unidad', codigoBarras: '', detraccion: false })
+    setNuevoProducto({ codigo: '', nombre: '', categoria: '', stock: 0, minimo: 5, costo: 0, precio: 0, unidad: 'unidad' })
+  }
+
+  const eliminarProducto = async (id: string) => {
+    if (!confirm('¿Eliminar este producto?')) return
+    await supabase.from('productos').delete().eq('id', id)
+    setProductos(productos.filter(p => p.id !== id))
+    setProductoSeleccionado(null)
   }
 
   const guardarCategoria = async () => {
-    if (!nuevaCategoria) return
-    const { error } = await supabase.from('categorias_productos').insert([{ nombre: nuevaCategoria, empresa_id: empresaId }])
+    if (!nuevaCategoria.trim()) return
+    const { data, error } = await supabase.from('categorias_productos').insert([{ nombre: nuevaCategoria.trim(), empresa_id: empresaId }]).select().single()
     if (error) { alert('Error: ' + error.message); return }
-    setCategorias([...categorias, nuevaCategoria])
+    setCategorias([...categorias, data])
     setNuevaCategoria('')
   }
 
-  const eliminarCategoria = async (cat) => {
-    await supabase.from('categorias_productos').delete().eq('nombre', cat).eq('empresa_id', empresaId)
-    setCategorias(categorias.filter(c => c !== cat))
+  const actualizarCategoria = async (id: string, nombre: string) => {
+    if (!nombre.trim()) return
+    await supabase.from('categorias_productos').update({ nombre: nombre.trim() }).eq('id', id)
+    setCategorias(categorias.map(c => c.id === id ? { ...c, nombre: nombre.trim() } : c))
+    setEditandoCategoria(null)
   }
 
-  const escapeCSV = (val) => {
+  const eliminarCategoria = async (id: string) => {
+    if (!confirm('¿Eliminar esta categoria?')) return
+    await supabase.from('categorias_productos').delete().eq('id', id)
+    setCategorias(categorias.filter(c => c.id !== id))
+  }
+
+  const escapeCSV = (val: any) => {
     const str = String(val === null || val === undefined ? '' : val)
     if (str.includes(';') || str.includes('"') || str.includes('\n')) return '"' + str.replace(/"/g, '""') + '"'
     return str
@@ -96,7 +110,10 @@ export default function Inventario() {
       <div className="flex h-screen bg-gray-950 text-white">
         <Sidebar menuAbierto={menuAbierto} setMenuAbierto={setMenuAbierto} />
         <div className="flex-1 overflow-auto p-4 md:p-8">
-          <button onClick={() => setProductoSeleccionado(null)} className="text-gray-400 hover:text-white text-sm mb-6">← Volver</button>
+          <div className="flex justify-between items-center mb-6">
+            <button onClick={() => setProductoSeleccionado(null)} className="text-gray-400 hover:text-white text-sm">← Volver</button>
+            <button onClick={() => eliminarProducto(p.id)} className="text-red-400 hover:text-red-300 text-sm">🗑 Eliminar</button>
+          </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-8">
             <h2 className="text-xl md:text-3xl font-bold mb-1">{p.nombre}</h2>
             <p className="text-gray-400 text-sm mb-6">Codigo: {p.codigo || '-'}</p>
@@ -157,11 +174,11 @@ export default function Inventario() {
                 </div>
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 md:p-4">
                   <p className="text-xs text-gray-400 mb-1">Stock bajo</p>
-                  <p className="text-xl md:text-2xl font-bold text-red-400">{productos.filter(p => p.stock <= p.minimo).length}</p>
+                  <p className="text-xl md:text-2xl font-bold text-red-400">{productos.filter(p => (p.stock||0) <= (p.minimo||0)).length}</p>
                 </div>
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 md:p-4">
                   <p className="text-xs text-gray-400 mb-1">Valor total</p>
-                  <p className="text-xl md:text-2xl font-bold text-green-400">S/ {productos.reduce((sum, p) => sum + (p.stock || 0) * (p.costo || 0), 0).toLocaleString()}</p>
+                  <p className="text-xl md:text-2xl font-bold text-green-400">S/ {productos.reduce((sum, p) => sum + (p.stock||0)*(p.costo||0), 0).toLocaleString()}</p>
                 </div>
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 md:p-4">
                   <p className="text-xs text-gray-400 mb-1">Categorias</p>
@@ -173,7 +190,7 @@ export default function Inventario() {
                 <input type="text" placeholder="Buscar producto..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
               </div>
               <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
-                {['todos', 'bajo', ...categorias].map((f) => (
+                {['todos', 'bajo', ...categorias.map(c => c.nombre)].map((f) => (
                   <button key={f} onClick={() => setFiltro(f)} className={'px-3 py-1 rounded-lg text-xs whitespace-nowrap transition-all ' + (filtro === f ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
                     {f === 'todos' ? 'Todos' : f === 'bajo' ? '⚠ Stock bajo' : f}
                   </button>
@@ -196,9 +213,12 @@ export default function Inventario() {
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm truncate">{p.nombre}</p>
                           <p className="text-xs text-gray-400">{p.codigo || '-'} • {p.categoria || '-'}</p>
-                          <p className="text-xs mt-1">S/ {p.precio || 0} • <span className={p.stock <= p.minimo ? 'text-red-400' : 'text-green-400'}>Stock: {p.stock || 0}</span></p>
+                          <p className="text-xs mt-1">S/ {p.precio || 0} • <span className={(p.stock||0) <= (p.minimo||0) ? 'text-red-400' : 'text-green-400'}>Stock: {p.stock || 0}</span></p>
                         </div>
-                        <button onClick={() => setProductoSeleccionado(p)} className="text-blue-400 text-xs ml-3 flex-shrink-0">Ver →</button>
+                        <div className="flex gap-2 ml-3">
+                          <button onClick={() => setProductoSeleccionado(p)} className="text-blue-400 text-xs">Ver</button>
+                          <button onClick={() => eliminarProducto(p.id)} className="text-red-400 text-xs">🗑</button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -225,21 +245,22 @@ export default function Inventario() {
                             <td className="px-4 py-3 text-sm font-medium">{p.nombre}</td>
                             <td className="px-4 py-3 text-sm text-gray-300">{p.categoria || '-'}</td>
                             <td className="px-4 py-3">
-                              <span className={'text-sm font-bold ' + ((p.stock || 0) <= (p.minimo || 0) ? 'text-red-400' : 'text-green-400')}>{p.stock || 0}</span>
+                              <span className={'text-sm font-bold ' + ((p.stock||0) <= (p.minimo||0) ? 'text-red-400' : 'text-green-400')}>{p.stock || 0}</span>
                               <span className="text-xs text-gray-500"> {p.unidad || 'unidad'}</span>
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-300">S/ {p.costo || 0}</td>
                             <td className="px-4 py-3 text-sm font-medium">S/ {p.precio || 0}</td>
                             <td className="px-4 py-3 text-sm text-green-400">{p.margen || 0}%</td>
                             <td className="px-4 py-3">
-                              {(p.stock || 0) <= (p.minimo || 0) ? (
+                              {(p.stock||0) <= (p.minimo||0) ? (
                                 <span className="bg-red-900 text-red-400 text-xs px-2 py-1 rounded-full">Stock bajo</span>
                               ) : (
                                 <span className="bg-green-900 text-green-400 text-xs px-2 py-1 rounded-full">OK</span>
                               )}
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 flex gap-2">
                               <button onClick={() => setProductoSeleccionado(p)} className="text-blue-400 hover:text-blue-300 text-xs">Ver</button>
+                              <button onClick={() => eliminarProducto(p.id)} className="text-red-400 hover:text-red-300 text-xs">🗑</button>
                             </td>
                           </tr>
                         ))}
@@ -255,7 +276,7 @@ export default function Inventario() {
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
               <h3 className="font-semibold mb-4 md:mb-6">Categorias</h3>
               <div className="flex gap-3 mb-4 md:mb-6">
-                <input type="text" placeholder="Nueva categoria..." value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                <input type="text" placeholder="Nueva categoria..." value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && guardarCategoria()} className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 <button onClick={guardarCategoria} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Agregar</button>
               </div>
               {categorias.length === 0 ? (
@@ -263,14 +284,37 @@ export default function Inventario() {
                   <p className="text-sm">No hay categorias. Agrega una arriba.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {categorias.map((cat) => (
-                    <div key={cat} className="bg-gray-800 border border-gray-700 rounded-xl p-3 md:p-4 flex justify-between items-center">
-                      <div>
-                        <p className="font-medium text-sm">{cat}</p>
-                        <p className="text-xs text-gray-400">{productos.filter(p => p.categoria === cat).length} productos</p>
+                    <div key={cat.id} className="bg-gray-800 border border-gray-700 rounded-xl p-3 md:p-4 flex justify-between items-center">
+                      {editandoCategoria?.id === cat.id ? (
+                        <input
+                          type="text"
+                          value={editandoCategoria.nombre}
+                          onChange={(e) => setEditandoCategoria({...editandoCategoria, nombre: e.target.value})}
+                          onKeyDown={(e) => e.key === 'Enter' && actualizarCategoria(cat.id, editandoCategoria.nombre)}
+                          className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500 mr-2"
+                          autoFocus
+                        />
+                      ) : (
+                        <div>
+                          <p className="font-medium text-sm">{cat.nombre}</p>
+                          <p className="text-xs text-gray-400">{productos.filter(p => p.categoria === cat.nombre).length} productos</p>
+                        </div>
+                      )}
+                      <div className="flex gap-2 flex-shrink-0">
+                        {editandoCategoria?.id === cat.id ? (
+                          <>
+                            <button onClick={() => actualizarCategoria(cat.id, editandoCategoria.nombre)} className="text-green-400 hover:text-green-300 text-xs">✓ Guardar</button>
+                            <button onClick={() => setEditandoCategoria(null)} className="text-gray-400 hover:text-gray-300 text-xs">✕</button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => setEditandoCategoria({id: cat.id, nombre: cat.nombre})} className="text-blue-400 hover:text-blue-300 text-xs">✏</button>
+                            <button onClick={() => eliminarCategoria(cat.id)} className="text-red-400 hover:text-red-300 text-xs">🗑</button>
+                          </>
+                        )}
                       </div>
-                      <button onClick={() => eliminarCategoria(cat)} className="text-red-400 hover:text-red-300 text-xs">X</button>
                     </div>
                   ))}
                 </div>
@@ -282,7 +326,7 @@ export default function Inventario() {
 
       {mostrarNuevo && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg max-h-screen overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold">Nuevo producto</h3>
               <button onClick={() => setMostrarNuevo(false)} className="text-gray-400 hover:text-white text-xl">X</button>
@@ -303,7 +347,7 @@ export default function Inventario() {
                   <label className="text-xs text-gray-400 mb-1 block">Categoria</label>
                   <select value={nuevoProducto.categoria} onChange={(e) => setNuevoProducto({...nuevoProducto, categoria: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                     <option value="">Seleccionar...</option>
-                    {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                    {categorias.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
                   </select>
                 </div>
                 <div>
