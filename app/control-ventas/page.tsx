@@ -20,12 +20,12 @@ export default function ControlVentas() {
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [empresaId, setEmpresaId] = useState<string|null>(null)
-  const [busquedaCliente, setBusquedaCliente] = useState<Record<string, string>>({})
-  const [mostrarDropdown, setMostrarDropdown] = useState<string|null>(null)
-  const [filtros, setFiltros] = useState({
-    mes: 'todos', cliente: '', ruc_dni: '', ciudad: '', vendedor: '',
-    monto: '', tipo_pago: '', status: ''
-  })
+  const [busquedaClienteTabla, setBusquedaClienteTabla] = useState<Record<string, string>>({})
+  const [mostrarDropdownTabla, setMostrarDropdownTabla] = useState<string|null>(null)
+  const [busquedaClienteNueva, setBusquedaClienteNueva] = useState('')
+  const [clienteNuevaSeleccionado, setClienteNuevaSeleccionado] = useState<any>(null)
+  const [mostrarDropdownNueva, setMostrarDropdownNueva] = useState(false)
+  const [filtros, setFiltros] = useState({ mes: 'todos', cliente: '', ciudad: '', vendedor: '', tipo_pago: '', status: '' })
   const [nueva, setNueva] = useState({
     mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0,
     cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '',
@@ -54,9 +54,14 @@ export default function ControlVentas() {
     setCargando(false)
   }
 
-  const clientesFiltrados = (texto: string) => clientes.filter(c =>
+  const clientesFiltradosTabla = (texto: string) => clientes.filter(c =>
     (c.nombres + ' ' + c.apellidos).toLowerCase().includes(texto.toLowerCase()) ||
     (c.dni || '').includes(texto)
+  ).slice(0, 5)
+
+  const clientesFiltradosNueva = clientes.filter(c =>
+    (c.nombres + ' ' + c.apellidos).toLowerCase().includes(busquedaClienteNueva.toLowerCase()) ||
+    (c.dni || '').includes(busquedaClienteNueva)
   ).slice(0, 5)
 
   const filtradas = ventas.filter(v => {
@@ -65,7 +70,6 @@ export default function ControlVentas() {
       (filtros.cliente === '' || (v.cliente || '').toLowerCase().includes(filtros.cliente.toLowerCase())) &&
       (filtros.ciudad === '' || (v.ciudad || '').toLowerCase().includes(filtros.ciudad.toLowerCase())) &&
       (filtros.vendedor === '' || (v.vendedor || '').toLowerCase().includes(filtros.vendedor.toLowerCase())) &&
-      (filtros.monto === '' || String(v.monto || '').includes(filtros.monto)) &&
       (filtros.tipo_pago === '' || v.tipo_pago === filtros.tipo_pago) &&
       (filtros.status === '' || v.status === filtros.status) &&
       (busqueda === '' || (v.cliente || '').toLowerCase().includes(busqueda.toLowerCase()) || (v.ciudad || '').toLowerCase().includes(busqueda.toLowerCase()))
@@ -86,20 +90,36 @@ export default function ControlVentas() {
     setVentas(ventas.filter(v => v.id !== id))
   }
 
-  const seleccionarCliente = (ventaId: string, cliente: any) => {
+  const seleccionarClienteTabla = (ventaId: string, cliente: any) => {
     const nombre = cliente.nombres + ' ' + cliente.apellidos
     setVentas(ventas.map(v => v.id === ventaId ? { ...v, cliente: nombre, ruc_dni: cliente.dni || '', ciudad: cliente.ciudad || '' } : v))
     supabase.from('ventas_especializadas').update({ cliente: nombre, ruc_dni: cliente.dni || '', ciudad: cliente.ciudad || '' }).eq('id', ventaId)
-    setMostrarDropdown(null)
-    setBusquedaCliente({})
+    setMostrarDropdownTabla(null)
+    setBusquedaClienteTabla({})
+  }
+
+  const seleccionarClienteNueva = (cliente: any) => {
+    setClienteNuevaSeleccionado(cliente)
+    setBusquedaClienteNueva('')
+    setMostrarDropdownNueva(false)
+    setNueva({...nueva, cliente: cliente.nombres + ' ' + cliente.apellidos, ruc_dni: cliente.dni || '', ciudad: cliente.ciudad || ''})
   }
 
   const guardarNueva = async () => {
+    if (!nueva.cliente && !clienteNuevaSeleccionado) { alert('Ingresa el nombre del cliente'); return }
+    if (!nueva.monto) { alert('Ingresa el monto'); return }
     if (!empresaId) { alert('Error: no se encontro la empresa'); return }
-    const { data, error } = await supabase.from('ventas_especializadas').insert([{ empresa_id: empresaId, ...nueva }]).select().single()
+
+    const { data, error } = await supabase.from('ventas_especializadas').insert([{
+      empresa_id: empresaId,
+      ...nueva,
+      paciente_id: clienteNuevaSeleccionado ? clienteNuevaSeleccionado.id : null,
+    }]).select().single()
     if (error) { alert('Error: ' + error.message); return }
     setVentas([data, ...ventas])
     setMostrarNueva(false)
+    setClienteNuevaSeleccionado(null)
+    setBusquedaClienteNueva('')
     setNueva({ mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde' })
   }
 
@@ -111,7 +131,7 @@ export default function ControlVentas() {
 
   const descargarCSV = () => {
     const headers = ['Mes','Cliente','RUC/DNI','Ciudad','Vendedor','Monto','Cantidad','Facturado por','Fecha venta','Guia/Factura','Comentarios','Tipo pago','Cuotas','Fechas pago','Status']
-    const rows = filtradas.map(v => [v.mes || '', v.cliente || '', v.ruc_dni || '', v.ciudad || '', v.vendedor || '', v.monto || 0, v.cantidad || 0, v.facturado_por || '', v.fecha_venta || '', v.guia_factura || '', v.comentarios || '', v.tipo_pago || '', v.num_cuotas || 0, v.fechas_pago || '', v.status || ''])
+    const rows = filtradas.map(v => [v.mes||'', v.cliente||'', v.ruc_dni||'', v.ciudad||'', v.vendedor||'', v.monto||0, v.cantidad||0, v.facturado_por||'', v.fecha_venta||'', v.guia_factura||'', v.comentarios||'', v.tipo_pago||'', v.num_cuotas||0, v.fechas_pago||'', v.status||''])
     const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -142,7 +162,7 @@ export default function ControlVentas() {
 
         {mostrarFiltros && (
           <div className="border-b border-gray-800 px-4 md:px-6 py-4 bg-gray-900">
-            <div className="grid grid-cols-2 md:grid-cols-7 gap-2 mb-2">
+            <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
               <select value={filtros.mes} onChange={(e) => setFiltros({...filtros, mes: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none col-span-2 md:col-span-1">
                 <option value="todos">Todos los meses</option>
                 {meses.map(m => <option key={m} value={m}>{m}</option>)}
@@ -161,7 +181,7 @@ export default function ControlVentas() {
                 <option value="naranja">Naranja</option>
                 <option value="rojo">Rojo</option>
               </select>
-              <button onClick={() => setFiltros({ mes: 'todos', cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: '', tipo_pago: '', status: '' })} className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs">Limpiar</button>
+              <button onClick={() => setFiltros({ mes: 'todos', cliente: '', ciudad: '', vendedor: '', tipo_pago: '', status: '' })} className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs">Limpiar</button>
             </div>
           </div>
         )}
@@ -173,22 +193,9 @@ export default function ControlVentas() {
             <table className="w-full text-sm border-collapse min-w-max">
               <thead>
                 <tr className="bg-gray-800">
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Mes</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Cliente</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">RUC/DNI</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Ciudad</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Vendedor</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Monto</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Cant.</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Facturado por</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Fecha</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Guia/Factura</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Comentarios</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Tipo pago</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Cuotas</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Fechas pago</th>
-                  <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Status</th>
-                  <th className="px-3 py-3 border border-gray-700"></th>
+                  {['Mes','Cliente','RUC/DNI','Ciudad','Vendedor','Monto','Cant.','Facturado por','Fecha','Guia/Factura','Comentarios','Tipo pago','Cuotas','Fechas pago','Status',''].map(h => (
+                    <th key={h} className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -202,11 +209,11 @@ export default function ControlVentas() {
                       </select>
                     </td>
                     <td className="px-2 py-2 border border-gray-700 relative">
-                      <input value={busquedaCliente[v.id] !== undefined ? busquedaCliente[v.id] : (v.cliente || '')} onChange={(e) => { setBusquedaCliente({...busquedaCliente, [v.id]: e.target.value}); editarCampo(v.id, 'cliente', e.target.value); setMostrarDropdown(v.id) }} onFocus={() => setMostrarDropdown(v.id)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32" />
-                      {mostrarDropdown === v.id && (busquedaCliente[v.id] || '').length > 0 && (
+                      <input value={busquedaClienteTabla[v.id] !== undefined ? busquedaClienteTabla[v.id] : (v.cliente || '')} onChange={(e) => { setBusquedaClienteTabla({...busquedaClienteTabla, [v.id]: e.target.value}); editarCampo(v.id, 'cliente', e.target.value); setMostrarDropdownTabla(v.id) }} onFocus={() => setMostrarDropdownTabla(v.id)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32" />
+                      {mostrarDropdownTabla === v.id && (busquedaClienteTabla[v.id] || '').length > 0 && (
                         <div className="absolute top-full left-0 bg-gray-800 border border-gray-600 rounded-lg z-20 w-48 max-h-32 overflow-auto">
-                          {clientesFiltrados(busquedaCliente[v.id] || '').map((c: any) => (
-                            <button key={c.id} onClick={() => seleccionarCliente(v.id, c)} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs">
+                          {clientesFiltradosTabla(busquedaClienteTabla[v.id] || '').map((c: any) => (
+                            <button key={c.id} onClick={() => seleccionarClienteTabla(v.id, c)} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs">
                               <p>{c.nombres} {c.apellidos}</p>
                               <p className="text-gray-400">{c.dni || '-'}</p>
                             </button>
@@ -263,7 +270,7 @@ export default function ControlVentas() {
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold">Nueva venta</h3>
+              <h3 className="text-lg font-semibold">Nueva venta especializada</h3>
               <button onClick={() => setMostrarNueva(false)} className="text-gray-400 hover:text-white text-xl">X</button>
             </div>
             <div className="space-y-4">
@@ -276,47 +283,75 @@ export default function ControlVentas() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Cliente</label>
-                  <input type="text" onChange={(e) => setNueva({...nueva, cliente: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Buscar cliente registrado..."
+                      value={clienteNuevaSeleccionado ? clienteNuevaSeleccionado.nombres + ' ' + clienteNuevaSeleccionado.apellidos : busquedaClienteNueva}
+                      onChange={(e) => { setBusquedaClienteNueva(e.target.value); setClienteNuevaSeleccionado(null); setMostrarDropdownNueva(true); setNueva({...nueva, cliente: e.target.value}) }}
+                      onFocus={() => setMostrarDropdownNueva(true)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    />
+                    {mostrarDropdownNueva && busquedaClienteNueva && (
+                      <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 z-20 max-h-36 overflow-auto">
+                        {clientesFiltradosNueva.map((c: any) => (
+                          <button key={c.id} onClick={() => seleccionarClienteNueva(c)} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs">
+                            <p>{c.nombres} {c.apellidos}</p>
+                            <p className="text-gray-400">{c.dni || '-'} — {c.ciudad || '-'}</p>
+                          </button>
+                        ))}
+                        <button onClick={() => setMostrarDropdownNueva(false)} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs text-blue-400 border-t border-gray-700">
+                          + Usar "{busquedaClienteNueva}" sin registrar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {clienteNuevaSeleccionado && (
+                    <div className="mt-1 bg-blue-900 rounded px-2 py-1 flex justify-between items-center">
+                      <p className="text-xs text-blue-300">{clienteNuevaSeleccionado.nombres} {clienteNuevaSeleccionado.apellidos}</p>
+                      <button onClick={() => { setClienteNuevaSeleccionado(null); setNueva({...nueva, cliente: '', ruc_dni: '', ciudad: ''}) }} className="text-blue-400 text-xs">X</button>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">RUC / DNI</label>
-                  <input type="text" onChange={(e) => setNueva({...nueva, ruc_dni: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={nueva.ruc_dni} onChange={(e) => setNueva({...nueva, ruc_dni: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Ciudad</label>
-                  <input type="text" onChange={(e) => setNueva({...nueva, ciudad: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={nueva.ciudad} onChange={(e) => setNueva({...nueva, ciudad: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Vendedor</label>
-                  <input type="text" onChange={(e) => setNueva({...nueva, vendedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={nueva.vendedor} onChange={(e) => setNueva({...nueva, vendedor: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Monto S/</label>
-                  <input type="number" onChange={(e) => setNueva({...nueva, monto: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="number" value={nueva.monto} onChange={(e) => setNueva({...nueva, monto: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Cantidad</label>
-                  <input type="number" defaultValue={1} onChange={(e) => setNueva({...nueva, cantidad: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="number" value={nueva.cantidad} onChange={(e) => setNueva({...nueva, cantidad: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Facturado por</label>
-                  <input type="text" onChange={(e) => setNueva({...nueva, facturado_por: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={nueva.facturado_por} onChange={(e) => setNueva({...nueva, facturado_por: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Fecha venta</label>
-                  <input type="date" onChange={(e) => setNueva({...nueva, fecha_venta: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="date" value={nueva.fecha_venta} onChange={(e) => setNueva({...nueva, fecha_venta: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">N° Guia / Factura</label>
-                  <input type="text" onChange={(e) => setNueva({...nueva, guia_factura: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={nueva.guia_factura} onChange={(e) => setNueva({...nueva, guia_factura: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -336,9 +371,21 @@ export default function ControlVentas() {
                   </select>
                 </div>
               </div>
+              {nueva.tipo_pago === 'credito' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Numero de cuotas</label>
+                    <input type="number" min={2} value={nueva.num_cuotas || 2} onChange={(e) => setNueva({...nueva, num_cuotas: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Fechas de pago</label>
+                    <input type="text" placeholder="ej: 01/04/2025, 01/05/2025" value={nueva.fechas_pago} onChange={(e) => setNueva({...nueva, fechas_pago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">Comentarios</label>
-                <textarea onChange={(e) => setNueva({...nueva, comentarios: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-16" />
+                <textarea value={nueva.comentarios} onChange={(e) => setNueva({...nueva, comentarios: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 h-16" />
               </div>
             </div>
             <div className="flex gap-3 mt-6">
