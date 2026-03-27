@@ -1,10 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase, getEmpresaId, getSedeId } from '../../lib/supabase'
 import Sidebar from '../../components/Sidebar'
 
-const EMPRESA_ID = 'b2711600-fbf7-4f11-b699-8024e36c7cf5'
-const SEDE_ID = 'd976f6cb-01f1-4962-a728-1a1012ffc305'
 const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
 const productosDisponibles = [
@@ -37,6 +35,8 @@ const categorias = ['Servicio', 'Examen', 'Montura', 'Luna', 'Contacto', 'Cirugi
 const getMesActual = () => meses[new Date().getMonth()]
 
 export default function VentasDiarias() {
+  const [empresaId, setEmpresaId] = useState(null)
+  const [sedeId, setSedeId] = useState(null)
   const [carrito, setCarrito] = useState([])
   const [clientes, setClientes] = useState([])
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null)
@@ -62,10 +62,20 @@ export default function VentasDiarias() {
     num_cuotas: 0, fechas_pago: '', status: 'verde'
   })
 
-  useEffect(() => { cargarClientes() }, [])
+  useEffect(() => { iniciar() }, [])
 
-  const cargarClientes = async () => {
-    const { data } = await supabase.from('pacientes').select('id, nombres, apellidos, dni, telefono, ciudad').order('nombres')
+  const iniciar = async () => {
+    const eid = await getEmpresaId()
+    const sid = await getSedeId()
+    setEmpresaId(eid)
+    setSedeId(sid)
+    cargarClientes(eid)
+  }
+
+  const cargarClientes = async (eid) => {
+    const query = supabase.from('pacientes').select('id, nombres, apellidos, dni, telefono, ciudad').order('nombres')
+    if (eid) query.eq('empresa_id', eid)
+    const { data } = await query
     setClientes(data || [])
   }
 
@@ -113,6 +123,7 @@ export default function VentasDiarias() {
   const cobrar = async () => {
     if (carrito.length === 0) return alert('Agrega productos al carrito')
     if (!clienteSeleccionado && !busquedaCliente) return alert('Ingresa o selecciona un cliente')
+    if (!empresaId || !sedeId) return alert('Error: no se encontro la empresa')
     setGuardando(true)
 
     const nombreCliente = clienteSeleccionado
@@ -122,7 +133,7 @@ export default function VentasDiarias() {
     const { data: ventaData, error } = await supabase
       .from('ventas')
       .insert([{
-        empresa_id: EMPRESA_ID, sede_id: SEDE_ID,
+        empresa_id: empresaId, sede_id: sedeId,
         paciente_id: clienteSeleccionado ? clienteSeleccionado.id : null,
         subtotal, total, metodo_pago: metodoPago,
         estado: 'pagado', notas: nombreCliente,
@@ -142,7 +153,7 @@ export default function VentasDiarias() {
     }
 
     await supabase.from('caja').insert([{
-      sede_id: SEDE_ID, tipo: 'ingreso',
+      sede_id: sedeId, tipo: 'ingreso',
       concepto: 'Venta - ' + carrito.map(i => i.nombre).join(', '),
       monto: total, metodo_pago: metodoPago,
       venta_id: ventaData.id, cliente_nombre: nombreCliente,
@@ -154,7 +165,7 @@ export default function VentasDiarias() {
       const montoCuota = Math.round(total / numeroCuotas)
       for (let i = 0; i < numeroCuotas; i++) {
         await supabase.from('cuotas_pago').insert([{
-          venta_id: ventaData.id, empresa_id: EMPRESA_ID,
+          venta_id: ventaData.id, empresa_id: empresaId,
           cliente_nombre: nombreCliente, numero_cuota: i + 1,
           monto: montoCuota, fecha_vencimiento: fechas[i], estado: 'pendiente',
         }])
@@ -172,15 +183,15 @@ export default function VentasDiarias() {
   const registrarVentaEspecializada = async () => {
     if (!ventaEsp.cliente && !clienteEsp) return alert('Ingresa el nombre del cliente')
     if (!ventaEsp.monto) return alert('Ingresa el monto')
+    if (!empresaId || !sedeId) return alert('Error: no se encontro la empresa')
     setGuardandoEsp(true)
 
     const nombreCliente = clienteEsp ? clienteEsp.nombres + ' ' + clienteEsp.apellidos : ventaEsp.cliente
     const rucDni = clienteEsp ? (clienteEsp.dni || ventaEsp.ruc_dni) : ventaEsp.ruc_dni
     const ciudad = clienteEsp ? (clienteEsp.ciudad || ventaEsp.ciudad) : ventaEsp.ciudad
-    const fechasCuotas = ventaEsp.tipo_pago === 'credito' && ventaEsp.num_cuotas > 1 ? generarFechasCuotas(ventaEsp.num_cuotas).join(', ') : ''
 
-    const { error } = await supabase.from('ventas_especializadas').insert([{
-      empresa_id: EMPRESA_ID, sede_id: SEDE_ID,
+    await supabase.from('ventas_especializadas').insert([{
+      empresa_id: empresaId, sede_id: sedeId,
       paciente_id: clienteEsp ? clienteEsp.id : null,
       mes: ventaEsp.mes, cliente: nombreCliente, ruc_dni: rucDni,
       ciudad, vendedor: ventaEsp.vendedor, monto: ventaEsp.monto,
@@ -188,29 +199,15 @@ export default function VentasDiarias() {
       fecha_venta: ventaEsp.fecha_venta || new Date().toISOString().split('T')[0],
       guia_factura: ventaEsp.guia_factura, comentarios: ventaEsp.comentarios,
       tipo_pago: ventaEsp.tipo_pago, num_cuotas: ventaEsp.num_cuotas,
-      fechas_pago: ventaEsp.fechas_pago || fechasCuotas, status: ventaEsp.status,
+      fechas_pago: ventaEsp.fechas_pago, status: ventaEsp.status,
     }])
 
-    if (error) { alert('Error: ' + error.message); setGuardandoEsp(false); return }
-
     await supabase.from('caja').insert([{
-      sede_id: SEDE_ID, tipo: 'ingreso',
+      sede_id: sedeId, tipo: 'ingreso',
       concepto: 'Venta especializada - ' + nombreCliente,
       monto: ventaEsp.monto, metodo_pago: 'efectivo',
       cliente_nombre: nombreCliente, fecha: new Date().toISOString(),
     }])
-
-    if (ventaEsp.tipo_pago === 'credito' && ventaEsp.num_cuotas > 1) {
-      const fechas = generarFechasCuotas(ventaEsp.num_cuotas)
-      const montoCuota = Math.round(ventaEsp.monto / ventaEsp.num_cuotas)
-      for (let i = 0; i < ventaEsp.num_cuotas; i++) {
-        await supabase.from('cuotas_pago').insert([{
-          empresa_id: EMPRESA_ID, cliente_nombre: nombreCliente,
-          numero_cuota: i + 1, monto: montoCuota,
-          fecha_vencimiento: fechas[i], estado: 'pendiente',
-        }])
-      }
-    }
 
     setGuardandoEsp(false)
     alert('Venta especializada registrada')
@@ -233,9 +230,7 @@ export default function VentasDiarias() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setMostrarEspecializada(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">
-              + Especializada
-            </button>
+            <button onClick={() => setMostrarEspecializada(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Especializada</button>
             {carrito.length > 0 && (
               <button onClick={() => setMostrarCarrito(true)} className="md:hidden bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">
                 🛒 {carrito.length} — S/ {total}
@@ -262,7 +257,7 @@ export default function VentasDiarias() {
               return (
                 <div key={cat} className="mb-4 md:mb-6">
                   <h3 className="text-xs text-gray-400 uppercase mb-2 md:mb-3">{cat}</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-2 gap-2 md:gap-3">
+                  <div className="grid grid-cols-2 gap-2 md:gap-3">
                     {prods.map((producto) => (
                       <button key={producto.id} onClick={() => agregarAlCarrito(producto)} className="bg-gray-900 border border-gray-800 hover:border-blue-500 rounded-xl p-3 md:p-4 text-left transition-all">
                         <p className="text-xs md:text-sm font-medium leading-tight">{producto.nombre}</p>
@@ -279,14 +274,7 @@ export default function VentasDiarias() {
             <div className="p-4 border-b border-gray-800">
               <h3 className="font-semibold mb-3 text-sm">Detalle de venta</h3>
               <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Buscar cliente..."
-                  value={clienteSeleccionado ? clienteSeleccionado.nombres + ' ' + clienteSeleccionado.apellidos : busquedaCliente}
-                  onChange={(e) => { setBusquedaCliente(e.target.value); setClienteSeleccionado(null); setMostrarClientes(true) }}
-                  onFocus={() => setMostrarClientes(true)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                />
+                <input type="text" placeholder="Buscar cliente..." value={clienteSeleccionado ? clienteSeleccionado.nombres + ' ' + clienteSeleccionado.apellidos : busquedaCliente} onChange={(e) => { setBusquedaCliente(e.target.value); setClienteSeleccionado(null); setMostrarClientes(true) }} onFocus={() => setMostrarClientes(true)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 {mostrarClientes && busquedaCliente && (
                   <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 z-10 max-h-48 overflow-auto">
                     {clientesFiltrados.slice(0, 5).map(c => (
@@ -295,9 +283,7 @@ export default function VentasDiarias() {
                         <p className="text-xs text-gray-400">{c.dni || 'Sin DNI'}</p>
                       </button>
                     ))}
-                    <button onClick={() => setMostrarClientes(false)} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs text-blue-400 border-t border-gray-700">
-                      + Usar nombre sin registrar
-                    </button>
+                    <button onClick={() => setMostrarClientes(false)} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs text-blue-400 border-t border-gray-700">+ Usar nombre sin registrar</button>
                   </div>
                 )}
               </div>
@@ -333,16 +319,14 @@ export default function VentasDiarias() {
                 <span>Total</span>
                 <span className="text-green-400">S/ {total}</span>
               </div>
-              <div className="mb-3">
-                <div className="grid grid-cols-3 gap-2">
-                  {['efectivo', 'tarjeta', 'yape'].map((metodo) => (
-                    <button key={metodo} onClick={() => setMetodoPago(metodo)} className={'py-2 rounded-lg text-xs font-medium ' + (metodoPago === metodo ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400')}>
-                      {metodo.charAt(0).toUpperCase() + metodo.slice(1)}
-                    </button>
-                  ))}
-                </div>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                {['efectivo', 'tarjeta', 'yape'].map((metodo) => (
+                  <button key={metodo} onClick={() => setMetodoPago(metodo)} className={'py-2 rounded-lg text-xs font-medium ' + (metodoPago === metodo ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400')}>
+                    {metodo.charAt(0).toUpperCase() + metodo.slice(1)}
+                  </button>
+                ))}
               </div>
-              <div className="mb-3 flex items-center gap-3">
+              <div className="flex items-center gap-3 mb-3">
                 <input type="checkbox" id="cuotas" checked={cuotas} onChange={(e) => setCuotas(e.target.checked)} className="w-4 h-4" />
                 <label htmlFor="cuotas" className="text-sm text-gray-300">Cuotas</label>
                 {cuotas && <input type="number" min={2} max={24} value={numeroCuotas} onChange={(e) => setNumeroCuotas(Number(e.target.value))} className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white" />}
@@ -363,20 +347,11 @@ export default function VentasDiarias() {
               <button onClick={() => setMostrarCarrito(false)} className="text-gray-400 text-xl">X</button>
             </div>
             <div className="relative mb-4">
-              <input
-                type="text"
-                placeholder="Buscar cliente..."
-                value={clienteSeleccionado ? clienteSeleccionado.nombres + ' ' + clienteSeleccionado.apellidos : busquedaCliente}
-                onChange={(e) => { setBusquedaCliente(e.target.value); setClienteSeleccionado(null); setMostrarClientes(true) }}
-                onFocus={() => setMostrarClientes(true)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-              />
+              <input type="text" placeholder="Buscar cliente..." value={clienteSeleccionado ? clienteSeleccionado.nombres + ' ' + clienteSeleccionado.apellidos : busquedaCliente} onChange={(e) => { setBusquedaCliente(e.target.value); setClienteSeleccionado(null); setMostrarClientes(true) }} onFocus={() => setMostrarClientes(true)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
               {mostrarClientes && busquedaCliente && (
                 <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 z-10 max-h-40 overflow-auto">
                   {clientesFiltrados.slice(0, 5).map(c => (
-                    <button key={c.id} onClick={() => { setClienteSeleccionado(c); setBusquedaCliente(''); setMostrarClientes(false) }} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm">
-                      {c.nombres} {c.apellidos}
-                    </button>
+                    <button key={c.id} onClick={() => { setClienteSeleccionado(c); setBusquedaCliente(''); setMostrarClientes(false) }} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm">{c.nombres} {c.apellidos}</button>
                   ))}
                 </div>
               )}
@@ -442,14 +417,7 @@ export default function VentasDiarias() {
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Cliente</label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Buscar cliente..."
-                      value={clienteEsp ? clienteEsp.nombres + ' ' + clienteEsp.apellidos : busquedaClienteEsp}
-                      onChange={(e) => { setBusquedaClienteEsp(e.target.value); setClienteEsp(null); setMostrarClientesEsp(true); setVentaEsp({...ventaEsp, cliente: e.target.value}) }}
-                      onFocus={() => setMostrarClientesEsp(true)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                    />
+                    <input type="text" placeholder="Buscar cliente..." value={clienteEsp ? clienteEsp.nombres + ' ' + clienteEsp.apellidos : busquedaClienteEsp} onChange={(e) => { setBusquedaClienteEsp(e.target.value); setClienteEsp(null); setMostrarClientesEsp(true); setVentaEsp({...ventaEsp, cliente: e.target.value}) }} onFocus={() => setMostrarClientesEsp(true)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                     {mostrarClientesEsp && busquedaClienteEsp && (
                       <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 z-20 max-h-36 overflow-auto">
                         {clientesEspFiltrados.slice(0, 4).map(c => (
