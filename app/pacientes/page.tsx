@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase, getEmpresaId } from '../../lib/supabase'
 import Sidebar from '../../components/Sidebar'
 
 const statusColors = {
@@ -15,24 +15,38 @@ export default function Pacientes() {
   const [mostrar, setMostrar] = useState(false)
   const [cargando, setCargando] = useState(true)
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [empresaId, setEmpresaId] = useState(null)
   const [nuevo, setNuevo] = useState({
     nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', encargado: '', status: 'verde'
   })
 
-  useEffect(() => { cargarPacientes() }, [])
+  useEffect(() => { iniciar() }, [])
 
-  const cargarPacientes = async () => {
+  const iniciar = async () => {
+    const eid = await getEmpresaId()
+    setEmpresaId(eid)
+    cargarPacientes(eid)
+  }
+
+  const cargarPacientes = async (eid) => {
     setCargando(true)
-    const { data } = await supabase.from('pacientes').select('*').order('created_at', { ascending: false })
+    const query = supabase.from('pacientes').select('*').order('created_at', { ascending: false })
+    if (eid) query.eq('empresa_id', eid)
+    const { data } = await query
     setPacientes(data || [])
     setCargando(false)
   }
 
   const guardarPaciente = async () => {
     if (!nuevo.nombres || !nuevo.apellidos) { alert('Nombres y apellidos son obligatorios'); return }
-    const { error } = await supabase.from('pacientes').insert([nuevo])
+    const { error } = await supabase.from('pacientes').insert([{ ...nuevo, empresa_id: empresaId }])
     if (error) { alert('Error: ' + error.message) }
-    else { alert('Cliente guardado'); setMostrar(false); setNuevo({ nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', encargado: '', status: 'verde' }); cargarPacientes() }
+    else {
+      alert('Cliente guardado')
+      setMostrar(false)
+      setNuevo({ nombres: '', apellidos: '', dni: '', telefono: '', email: '', ciudad: '', direccion: '', encargado: '', status: 'verde' })
+      cargarPacientes(empresaId)
+    }
   }
 
   const cambiarStatus = async (id, status) => {
@@ -54,10 +68,7 @@ export default function Pacientes() {
 
   const descargarCSV = () => {
     const headers = ['Nombres','Apellidos','DNI/RUC','Telefono','Email','Ciudad','Direccion','Encargado','Status']
-    const rows = filtrados.map(p => [
-      p.nombres || '', p.apellidos || '', p.dni || '', p.telefono || '',
-      p.email || '', p.ciudad || '', p.direccion || '', p.encargado || '', p.status || ''
-    ])
+    const rows = filtrados.map(p => [p.nombres || '', p.apellidos || '', p.dni || '', p.telefono || '', p.email || '', p.ciudad || '', p.direccion || '', p.encargado || '', p.status || ''])
     const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -80,12 +91,8 @@ export default function Pacientes() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={descargarCSV} className="bg-gray-700 hover:bg-gray-600 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm hidden md:block">
-              ⬇ Descargar
-            </button>
-            <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">
-              + Nuevo
-            </button>
+            <button onClick={descargarCSV} className="bg-gray-700 hover:bg-gray-600 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm hidden md:block">⬇ Descargar</button>
+            <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Nuevo</button>
           </div>
         </div>
 
@@ -116,9 +123,7 @@ export default function Pacientes() {
                       </select>
                     </div>
                     <div className="flex justify-between items-center mt-2">
-                      <div className="text-xs text-gray-400">
-                        <p>{p.telefono || '-'} • {p.ciudad || '-'}</p>
-                      </div>
+                      <p className="text-xs text-gray-400">{p.telefono || '-'} • {p.ciudad || '-'}</p>
                       <a href={'/pacientes/' + p.id} className="text-blue-400 hover:text-blue-300 text-xs">Ver perfil →</a>
                     </div>
                   </div>
