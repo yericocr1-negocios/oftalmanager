@@ -5,15 +5,20 @@ import { supabase, getEmpresaId } from '../../lib/supabase'
 
 const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
+interface DetalleItem {
+  nombre: string
+  ventas: number
+  monto: number
+}
+
 export default function Reportes() {
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [cargando, setCargando] = useState(true)
-  const [empresaId, setEmpresaId] = useState(null)
-  const [ventasDia, setVentasDia] = useState([])
-  const [ventasMes, setVentasMes] = useState([])
-  const [ventasEsp, setVentasEsp] = useState([])
+  const [ventasDia, setVentasDia] = useState<{dia: string, ventas: number, fecha: string}[]>([])
+  const [ventasMes, setVentasMes] = useState<{mes: string, ventas: number}[]>([])
+  const [ventasEsp, setVentasEsp] = useState<any[]>([])
   const [modoDia, setModoDia] = useState('dia')
-  const [modoDetalle, setModoDetalle] = useState('doctor')
+  const [modoDetalle, setModoDetalle] = useState('vendedor')
   const [totalIngresos, setTotalIngresos] = useState(0)
   const [totalVentas, setTotalVentas] = useState(0)
   const [ticketPromedio, setTicketPromedio] = useState(0)
@@ -22,25 +27,27 @@ export default function Reportes() {
 
   const iniciar = async () => {
     const eid = await getEmpresaId()
-    setEmpresaId(eid)
     cargarDatos(eid)
   }
 
-  const cargarDatos = async (eid) => {
+  const cargarDatos = async (eid: string | null) => {
     setCargando(true)
 
     const hoy = new Date()
     const inicioSemana = new Date(hoy)
     inicioSemana.setDate(hoy.getDate() - 6)
 
-    const cajaQuery = supabase.from('caja').select('*').eq('tipo', 'ingreso').gte('fecha', inicioSemana.toISOString())
+    let sedeIds: string[] = []
     if (eid) {
       const { data: sedes } = await supabase.from('sedes').select('id').eq('empresa_id', eid)
-      if (sedes && sedes.length > 0) {
-        cajaQuery.in('sede_id', sedes.map(s => s.id))
-      }
+      sedeIds = sedes?.map((s: any) => s.id) || []
     }
-    const { data: cajaData } = await cajaQuery
+
+    let cajaData: any[] = []
+    if (sedeIds.length > 0) {
+      const { data } = await supabase.from('caja').select('*').eq('tipo', 'ingreso').gte('fecha', inicioSemana.toISOString()).in('sede_id', sedeIds)
+      cajaData = data || []
+    }
 
     const diasSemana = []
     for (let i = 6; i >= 0; i--) {
@@ -48,64 +55,46 @@ export default function Reportes() {
       d.setDate(hoy.getDate() - i)
       const diaStr = d.toISOString().split('T')[0]
       const nombre = ['Dom','Lun','Mar','Mie','Jue','Vie','Sab'][d.getDay()]
-      const total = (cajaData || []).filter(m => m.fecha?.startsWith(diaStr)).reduce((sum, m) => sum + m.monto, 0)
+      const total = cajaData.filter(m => m.fecha?.startsWith(diaStr)).reduce((sum: number, m: any) => sum + m.monto, 0)
       diasSemana.push({ dia: nombre, ventas: total, fecha: diaStr })
     }
     setVentasDia(diasSemana)
-    setTotalIngresos((cajaData || []).reduce((sum, m) => sum + m.monto, 0))
+    setTotalIngresos(cajaData.reduce((sum: number, m: any) => sum + m.monto, 0))
 
     const espQuery = supabase.from('ventas_especializadas').select('*')
     if (eid) espQuery.eq('empresa_id', eid)
     const { data: espData } = await espQuery
-    setVentasEsp(espData || [])
-    setTotalVentas((espData || []).length)
-    setTicketPromedio((espData || []).length > 0 ? Math.round((espData || []).reduce((sum, v) => sum + (v.monto || 0), 0) / (espData || []).length) : 0)
+    const esp = espData || []
+    setVentasEsp(esp)
+    setTotalVentas(esp.length)
+    setTicketPromedio(esp.length > 0 ? Math.round(esp.reduce((sum: number, v: any) => sum + (v.monto || 0), 0) / esp.length) : 0)
 
     const ventasPorMes = meses.map(mes => ({
       mes,
-      ventas: (espData || []).filter(v => v.mes === mes).reduce((sum, v) => sum + (v.monto || 0), 0)
+      ventas: esp.filter((v: any) => v.mes === mes).reduce((sum: number, v: any) => sum + (v.monto || 0), 0)
     }))
     setVentasMes(ventasPorMes)
 
     setCargando(false)
   }
 
-  const getDetalleData = () => {
-    if (modoDetalle === 'doctor') {
-      const porDoctor = {}
-      ventasEsp.forEach(v => {
-        const key = v.vendedor || 'Sin vendedor'
-        if (!porDoctor[key]) porDoctor[key] = { nombre: key, ventas: 0, monto: 0 }
-        porDoctor[key].ventas++
-        porDoctor[key].monto += v.monto || 0
-      })
-      return Object.values(porDoctor).sort((a, b) => b.monto - a.monto).slice(0, 5)
-    } else if (modoDetalle === 'ciudad') {
-      const porCiudad = {}
-      ventasEsp.forEach(v => {
-        const key = v.ciudad || 'Sin ciudad'
-        if (!porCiudad[key]) porCiudad[key] = { nombre: key, ventas: 0, monto: 0 }
-        porCiudad[key].ventas++
-        porCiudad[key].monto += v.monto || 0
-      })
-      return Object.values(porCiudad).sort((a, b) => b.monto - a.monto).slice(0, 5)
-    } else {
-      const porVendedor = {}
-      ventasEsp.forEach(v => {
-        const key = v.vendedor || 'Sin vendedor'
-        if (!porVendedor[key]) porVendedor[key] = { nombre: key, ventas: 0, monto: 0 }
-        porVendedor[key].ventas++
-        porVendedor[key].monto += v.monto || 0
-      })
-      return Object.values(porVendedor).sort((a, b) => b.monto - a.monto).slice(0, 5)
-    }
+  const getDetalleData = (): DetalleItem[] => {
+    const acumulado: Record<string, DetalleItem> = {}
+
+    ventasEsp.forEach((v: any) => {
+      const key = modoDetalle === 'ciudad' ? (v.ciudad || 'Sin ciudad') : (v.vendedor || 'Sin vendedor')
+      if (!acumulado[key]) acumulado[key] = { nombre: key, ventas: 0, monto: 0 }
+      acumulado[key].ventas++
+      acumulado[key].monto += v.monto || 0
+    })
+
+    return Object.values(acumulado).sort((a, b) => b.monto - a.monto).slice(0, 5)
   }
 
   const detalleData = getDetalleData()
   const maxDetalle = detalleData.length > 0 ? Math.max(...detalleData.map(d => d.monto)) : 1
-
   const datosGrafico = modoDia === 'dia' ? ventasDia : ventasMes.filter(m => m.ventas > 0)
-  const maxGrafico = datosGrafico.length > 0 ? Math.max(...datosGrafico.map(v => modoDia === 'dia' ? v.ventas : v.ventas), 1) : 1
+  const maxGrafico = datosGrafico.length > 0 ? Math.max(...datosGrafico.map((v: any) => v.ventas), 1) : 1
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
@@ -154,19 +143,16 @@ export default function Reportes() {
                     <div className="text-center text-gray-500 text-sm py-8">No hay datos disponibles</div>
                   ) : (
                     <div className="flex items-end gap-1 md:gap-2 h-32 md:h-40">
-                      {datosGrafico.map((v, i) => {
-                        const valor = modoDia === 'dia' ? v.ventas : v.ventas
-                        return (
-                          <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                            <p className="text-xs text-gray-500 hidden md:block">S/{valor.toLocaleString()}</p>
-                            <div
-                              className="w-full bg-blue-600 rounded-t-md transition-all"
-                              style={{ height: valor > 0 ? Math.max((valor / maxGrafico * 100), 5) + '%' : '2px', opacity: valor > 0 ? 1 : 0.3 }}
-                            ></div>
-                            <p className="text-xs text-gray-400 truncate w-full text-center">{modoDia === 'dia' ? v.dia : v.mes?.slice(0,3)}</p>
-                          </div>
-                        )
-                      })}
+                      {datosGrafico.map((v: any, i: number) => (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <p className="text-xs text-gray-500 hidden md:block">S/{v.ventas.toLocaleString()}</p>
+                          <div
+                            className="w-full bg-blue-600 rounded-t-md transition-all"
+                            style={{ height: v.ventas > 0 ? Math.max((v.ventas / maxGrafico * 100), 5) + '%' : '2px', opacity: v.ventas > 0 ? 1 : 0.3 }}
+                          ></div>
+                          <p className="text-xs text-gray-400 truncate w-full text-center">{modoDia === 'dia' ? v.dia : v.mes?.slice(0,3)}</p>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -174,10 +160,10 @@ export default function Reportes() {
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-semibold text-sm md:text-base">
-                      {modoDetalle === 'doctor' ? 'Por vendedor' : modoDetalle === 'ciudad' ? 'Por ciudad' : 'Por vendedor'}
+                      Por {modoDetalle === 'ciudad' ? 'ciudad' : 'vendedor'}
                     </h3>
                     <div className="flex gap-1">
-                      <button onClick={() => setModoDetalle('doctor')} className={'px-2 py-1 rounded-lg text-xs ' + (modoDetalle === 'doctor' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400')}>Vendedor</button>
+                      <button onClick={() => setModoDetalle('vendedor')} className={'px-2 py-1 rounded-lg text-xs ' + (modoDetalle === 'vendedor' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400')}>Vendedor</button>
                       <button onClick={() => setModoDetalle('ciudad')} className={'px-2 py-1 rounded-lg text-xs ' + (modoDetalle === 'ciudad' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400')}>Ciudad</button>
                     </div>
                   </div>
@@ -207,40 +193,46 @@ export default function Reportes() {
                 {ventasMes.every(m => m.ventas === 0) ? (
                   <div className="text-center text-gray-500 text-sm py-8">No hay ventas especializadas registradas</div>
                 ) : (
-                  <div className="md:hidden space-y-2">
-                    {ventasMes.filter(m => m.ventas > 0).map((m) => (
-                      <div key={m.mes} className="flex justify-between items-center">
-                        <span className="text-sm">{m.mes}</span>
-                        <span className="text-green-400 font-bold text-sm">S/ {m.ventas.toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    <div className="md:hidden space-y-2">
+                      {ventasMes.filter(m => m.ventas > 0).map((m) => (
+                        <div key={m.mes} className="flex justify-between items-center">
+                          <span className="text-sm">{m.mes}</span>
+                          <span className="text-green-400 font-bold text-sm">S/ {m.ventas.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <table className="w-full hidden md:table">
+                      <thead>
+                        <tr className="border-b border-gray-800">
+                          <th className="text-left py-3 text-xs text-gray-400 uppercase">Mes</th>
+                          <th className="text-left py-3 text-xs text-gray-400 uppercase">Ingresos</th>
+                          <th className="text-left py-3 text-xs text-gray-400 uppercase">Participacion</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ventasMes.filter(m => m.ventas > 0).map((m) => {
+                          const totalAnio = ventasMes.reduce((s, x) => s + x.ventas, 0)
+                          const maxMes = Math.max(...ventasMes.map(x => x.ventas), 1)
+                          return (
+                            <tr key={m.mes} className="border-b border-gray-800">
+                              <td className="py-3 text-sm">{m.mes}</td>
+                              <td className="py-3 text-sm text-green-400">S/ {m.ventas.toLocaleString()}</td>
+                              <td className="py-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 bg-gray-800 rounded-full h-2">
+                                    <div className="bg-green-600 h-2 rounded-full" style={{ width: (m.ventas / maxMes * 100) + '%' }}></div>
+                                  </div>
+                                  <span className="text-xs text-gray-400">{Math.round(m.ventas / Math.max(totalAnio, 1) * 100)}%</span>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </>
                 )}
-                <table className="w-full hidden md:table">
-                  <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="text-left py-3 text-xs text-gray-400 uppercase">Mes</th>
-                      <th className="text-left py-3 text-xs text-gray-400 uppercase">Ingresos</th>
-                      <th className="text-left py-3 text-xs text-gray-400 uppercase">Participacion</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ventasMes.filter(m => m.ventas > 0).map((m) => (
-                      <tr key={m.mes} className="border-b border-gray-800">
-                        <td className="py-3 text-sm">{m.mes}</td>
-                        <td className="py-3 text-sm text-green-400">S/ {m.ventas.toLocaleString()}</td>
-                        <td className="py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-gray-800 rounded-full h-2">
-                              <div className="bg-green-600 h-2 rounded-full" style={{ width: (m.ventas / Math.max(...ventasMes.map(x => x.ventas), 1) * 100) + '%' }}></div>
-                            </div>
-                            <span className="text-xs text-gray-400">{Math.round(m.ventas / Math.max(ventasMes.reduce((s, x) => s + x.ventas, 0), 1) * 100)}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </>
           )}
