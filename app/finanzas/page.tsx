@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import Sidebar from '../../components/Sidebar'
 import { supabase, getEmpresaId, getSedeId } from '../../lib/supabase'
 
-const statusPagarColors = {
+const statusPagarColors: Record<string, string> = {
   pendiente: 'bg-yellow-600',
   parcial: 'bg-blue-600',
   pagado: 'bg-green-600',
@@ -12,17 +12,17 @@ const statusPagarColors = {
 
 export default function Finanzas() {
   const [tab, setTab] = useState('caja')
-  const [movimientos, setMovimientos] = useState([])
-  const [cuotas, setCuotas] = useState([])
-  const [pagar, setPagar] = useState([])
+  const [movimientos, setMovimientos] = useState<any[]>([])
+  const [cuotas, setCuotas] = useState<any[]>([])
+  const [pagar, setPagar] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   const [mostrarMov, setMostrarMov] = useState(false)
   const [mostrarPagar, setMostrarPagar] = useState(false)
   const [mostrarCuota, setMostrarCuota] = useState(false)
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
-  const [empresaId, setEmpresaId] = useState(null)
-  const [sedeId, setSedeId] = useState(null)
+  const [empresaId, setEmpresaId] = useState<string|null>(null)
+  const [sedeId, setSedeId] = useState<string|null>(null)
   const [filtroCaja, setFiltroCaja] = useState({ cliente: '', concepto: '', metodo: '', tipo: '', monto: '' })
   const [filtroCuotas, setFiltroCuotas] = useState({ cliente: '', estado: '' })
   const [filtroPagar, setFiltroPagar] = useState({ proveedor: '', tipo: '', producto: '', estado: '' })
@@ -40,7 +40,7 @@ export default function Finanzas() {
     cargarDatos(eid, sid)
   }
 
-  const cargarDatos = async (eid, sid) => {
+  const cargarDatos = async (eid: string|null, sid: string|null) => {
     setCargando(true)
     const cajaQuery = supabase.from('caja').select('*').order('fecha', { ascending: false }).limit(100)
     if (sid) cajaQuery.eq('sede_id', sid)
@@ -78,6 +78,23 @@ export default function Finanzas() {
   const egresos = movimientos.filter(m => m.tipo === 'egreso').reduce((sum, m) => sum + m.monto, 0)
   const totalCuotasPendientes = cuotas.filter(c => c.estado === 'pendiente').reduce((sum, c) => sum + c.monto, 0)
 
+  const eliminarMovimiento = async (id: string) => {
+    if (!confirm('¿Eliminar este movimiento?')) return
+    await supabase.from('caja').delete().eq('id', id)
+    setMovimientos(movimientos.filter(m => m.id !== id))
+  }
+
+  const eliminarCuota = async (id: string) => {
+    if (!confirm('¿Eliminar esta cuota?')) return
+    await supabase.from('cuotas_pago').delete().eq('id', id)
+    setCuotas(cuotas.filter(c => c.id !== id))
+  }
+
+  const eliminarPagar = (id: number) => {
+    if (!confirm('¿Eliminar esta cuenta por pagar?')) return
+    setPagar(pagar.filter(p => p.id !== id))
+  }
+
   const guardarMov = async () => {
     const { error } = await supabase.from('caja').insert([{
       sede_id: sedeId, tipo: nuevoMov.tipo, concepto: nuevoMov.concepto,
@@ -90,7 +107,7 @@ export default function Finanzas() {
     cargarDatos(empresaId, sedeId)
   }
 
-  const marcarCuotaPagada = async (id) => {
+  const marcarCuotaPagada = async (id: string) => {
     await supabase.from('cuotas_pago').update({ estado: 'pagado' }).eq('id', id)
     cargarDatos(empresaId, sedeId)
   }
@@ -100,12 +117,9 @@ export default function Finanzas() {
     if (!nuevaCuota.monto) { alert('Ingresa el monto'); return }
     if (!nuevaCuota.fecha_vencimiento) { alert('Ingresa la fecha de vencimiento'); return }
     const { error } = await supabase.from('cuotas_pago').insert([{
-      empresa_id: empresaId,
-      cliente_nombre: nuevaCuota.cliente_nombre,
-      numero_cuota: nuevaCuota.numero_cuota,
-      monto: nuevaCuota.monto,
-      fecha_vencimiento: nuevaCuota.fecha_vencimiento,
-      estado: nuevaCuota.estado,
+      empresa_id: empresaId, cliente_nombre: nuevaCuota.cliente_nombre,
+      numero_cuota: nuevaCuota.numero_cuota, monto: nuevaCuota.monto,
+      fecha_vencimiento: nuevaCuota.fecha_vencimiento, estado: nuevaCuota.estado,
     }])
     if (error) { alert('Error: ' + error.message); return }
     setMostrarCuota(false)
@@ -120,7 +134,7 @@ export default function Finanzas() {
     setNuevoPagar({ proveedor: '', tipoProveedor: '', fecha_venta: '', producto: '', total: 0, pagado: 0, pendiente: 0, fecha_vencimiento: '', estado: 'pendiente' })
   }
 
-  const editarPagar = (id, campo, valor) => {
+  const editarPagar = (id: number, campo: string, valor: any) => {
     setPagar(pagar.map(p => {
       if (p.id !== id) return p
       const updated = { ...p, [campo]: valor }
@@ -131,28 +145,25 @@ export default function Finanzas() {
     }))
   }
 
-  const escapeCSV = (val) => {
+  const escapeCSV = (val: any) => {
     const str = String(val === null || val === undefined ? '' : val)
     if (str.includes(';') || str.includes('"') || str.includes('\n')) return '"' + str.replace(/"/g, '""') + '"'
     return str
   }
 
   const descargar = () => {
-    let headers, rows, filename
+    let headers: string[], rows: any[][], filename: string
     if (tab === 'caja') {
-      headers = ['Fecha', 'Hora', 'Cliente', 'Concepto', 'Metodo', 'Tipo', 'Monto']
-      rows = movimientosFiltrados.map(m => [new Date(m.fecha).toLocaleDateString('es-PE'), new Date(m.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }), m.cliente_nombre || '', m.concepto || '', m.metodo_pago || '', m.tipo || '', m.monto || 0])
-      rows.push(['', '', '', '', 'INGRESOS', '', ingresos])
-      rows.push(['', '', '', '', 'EGRESOS', '', egresos])
-      rows.push(['', '', '', '', 'SALDO', '', ingresos - egresos])
+      headers = ['Fecha', 'Cliente', 'Concepto', 'Metodo', 'Tipo', 'Monto']
+      rows = movimientosFiltrados.map(m => [new Date(m.fecha).toLocaleDateString('es-PE'), m.cliente_nombre || '', m.concepto || '', m.metodo_pago || '', m.tipo || '', m.monto || 0])
       filename = 'caja.csv'
     } else if (tab === 'cuotas') {
       headers = ['Cliente', 'Cuota', 'Monto', 'Vencimiento', 'Estado']
       rows = cuotasFiltradas.map(c => [c.cliente_nombre || '', 'Cuota ' + c.numero_cuota, c.monto || 0, c.fecha_vencimiento || '', c.estado || ''])
       filename = 'cuotas.csv'
     } else {
-      headers = ['Proveedor', 'Tipo', 'Fecha venta', 'Producto', 'Total', 'Pagado', 'Pendiente', 'Vence', 'Estado']
-      rows = pagarFiltrados.map(p => [p.proveedor || '', p.tipoProveedor || '', p.fecha_venta || '', p.producto || '', p.total || 0, p.pagado || 0, p.pendiente || 0, p.fecha_vencimiento || '', p.estado || ''])
+      headers = ['Proveedor', 'Tipo', 'Producto', 'Total', 'Pagado', 'Pendiente', 'Vence', 'Estado']
+      rows = pagarFiltrados.map(p => [p.proveedor || '', p.tipoProveedor || '', p.producto || '', p.total || 0, p.pagado || 0, p.pendiente || 0, p.fecha_vencimiento || '', p.estado || ''])
       filename = 'cuentas-pagar.csv'
     }
     const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
@@ -178,7 +189,7 @@ export default function Finanzas() {
           </div>
           <div className="flex gap-2 md:gap-3">
             <button onClick={() => setMostrarFiltros(!mostrarFiltros)} className={'px-3 md:px-4 py-2 rounded-lg text-sm ' + (mostrarFiltros ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white')}>🔍</button>
-            <button onClick={descargar} className="bg-gray-700 hover:bg-gray-600 text-white px-3 md:px-4 py-2 rounded-lg text-sm hidden md:block">⬇ Descargar</button>
+            <button onClick={descargar} className="bg-gray-700 hover:bg-gray-600 text-white px-3 md:px-4 py-2 rounded-lg text-sm hidden md:block">⬇</button>
             {tab === 'caja' && <button onClick={() => setMostrarMov(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Movimiento</button>}
             {tab === 'cuotas' && <button onClick={() => setMostrarCuota(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Cuota</button>}
             {tab === 'pagar' && <button onClick={() => setMostrarPagar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Cuenta</button>}
@@ -226,7 +237,7 @@ export default function Finanzas() {
                 <option value="plin">Plin</option>
               </select>
               <select value={filtroCaja.tipo} onChange={(e) => setFiltroCaja({...filtroCaja, tipo: e.target.value})} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
-                <option value="">Todos los tipos</option>
+                <option value="">Todos</option>
                 <option value="ingreso">Ingreso</option>
                 <option value="egreso">Egreso</option>
               </select>
@@ -275,11 +286,12 @@ export default function Finanzas() {
                       <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase hidden md:table-cell">Metodo</th>
                       <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Tipo</th>
                       <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Monto</th>
+                      <th className="px-4 py-3"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {movimientosFiltrados.length === 0 ? (
-                      <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm">No hay movimientos</td></tr>
+                      <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm">No hay movimientos</td></tr>
                     ) : movimientosFiltrados.map((m) => (
                       <tr key={m.id} className="border-b border-gray-800 hover:bg-gray-800">
                         <td className="px-4 py-3 text-xs text-gray-400">{new Date(m.fecha).toLocaleDateString('es-PE')}</td>
@@ -292,6 +304,9 @@ export default function Finanzas() {
                         <td className={'px-4 py-3 text-sm font-bold ' + (m.tipo === 'ingreso' ? 'text-green-400' : 'text-red-400')}>
                           {m.tipo === 'ingreso' ? '+' : '-'} S/ {m.monto}
                         </td>
+                        <td className="px-4 py-3">
+                          <button onClick={() => eliminarMovimiento(m.id)} className="text-red-400 hover:text-red-300 text-xs">🗑</button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -301,6 +316,7 @@ export default function Finanzas() {
                       <td colSpan={2} className="px-4 py-3 text-xs text-green-400 font-bold hidden md:table-cell">Ingresos: S/ {ingresos.toLocaleString()}</td>
                       <td className="px-4 py-3 text-xs text-green-400 font-bold md:hidden">S/ {ingresos.toLocaleString()}</td>
                       <td className="px-4 py-3 text-xs text-red-400 font-bold">S/ {egresos.toLocaleString()}</td>
+                      <td></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -318,7 +334,7 @@ export default function Finanzas() {
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Monto</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase hidden md:table-cell">Vencimiento</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Estado</th>
-                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase hidden md:table-cell">Accion</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -333,8 +349,9 @@ export default function Finanzas() {
                       <td className="px-4 py-3">
                         <span className={'text-xs px-2 py-1 rounded-full ' + (c.estado === 'pagado' ? 'bg-green-900 text-green-400' : 'bg-yellow-900 text-yellow-400')}>{c.estado}</span>
                       </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        {c.estado !== 'pagado' && <button onClick={() => marcarCuotaPagada(c.id)} className="text-green-400 hover:text-green-300 text-xs">Marcar pagado</button>}
+                      <td className="px-4 py-3 flex gap-2">
+                        {c.estado !== 'pagado' && <button onClick={() => marcarCuotaPagada(c.id)} className="text-green-400 hover:text-green-300 text-xs">✓ Pagado</button>}
+                        <button onClick={() => eliminarCuota(c.id)} className="text-red-400 hover:text-red-300 text-xs">🗑</button>
                       </td>
                     </tr>
                   ))}
@@ -356,11 +373,12 @@ export default function Finanzas() {
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Pendiente</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase hidden md:table-cell">Vence</th>
                     <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Estado</th>
+                    <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {pagarFiltrados.length === 0 ? (
-                    <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400 text-sm">No hay cuentas por pagar</td></tr>
+                    <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400 text-sm">No hay cuentas por pagar</td></tr>
                   ) : pagarFiltrados.map((p) => (
                     <tr key={p.id} className="border-b border-gray-800 hover:bg-gray-800">
                       <td className="px-4 py-3"><input value={p.proveedor || ''} onChange={(e) => editarPagar(p.id, 'proveedor', e.target.value)} className="bg-transparent text-white text-sm w-full focus:outline-none border-b border-gray-700 focus:border-blue-500 min-w-20" /></td>
@@ -377,6 +395,9 @@ export default function Finanzas() {
                           <option value="pagado">Pagado</option>
                           <option value="vencido">Vencido</option>
                         </select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button onClick={() => eliminarPagar(p.id)} className="text-red-400 hover:text-red-300 text-xs">🗑</button>
                       </td>
                     </tr>
                   ))}
