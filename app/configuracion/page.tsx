@@ -3,14 +3,6 @@ import { useState, useEffect } from 'react'
 import Sidebar from '../../components/Sidebar'
 import { supabase, getEmpresaId } from '../../lib/supabase'
 
-const usuariosEjemplo = [
-  { id: 1, nombre: 'Admin', email: 'corporacion.vortex1@gmail.com', rol: 'admin', activo: true },
-]
-
-const sedesEjemplo = [
-  { id: 1, nombre: 'Sede Lima', direccion: 'Av. Javier Prado 123', ciudad: 'Lima', telefono: '01-234-5678' },
-]
-
 export default function Configuracion() {
   const [tab, setTab] = useState('empresa')
   const [doctores, setDoctores] = useState([])
@@ -18,21 +10,45 @@ export default function Configuracion() {
   const [mostrarNuevoDoctor, setMostrarNuevoDoctor] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [empresaId, setEmpresaId] = useState(null)
-  const [nuevoDoctor, setNuevoDoctor] = useState({
-    nombres: '', apellidos: '', especialidad: '', telefono: '', email: '', activo: true
-  })
+  const [empresa, setEmpresa] = useState({ nombre: '', email: '', ruc: '', telefono: '', direccion: '', ciudad: '' })
+  const [sedes, setSedes] = useState([])
+  const [usuarios, setUsuarios] = useState([])
+  const [guardandoEmpresa, setGuardandoEmpresa] = useState(false)
+  const [nuevoDoctor, setNuevoDoctor] = useState({ nombres: '', apellidos: '', especialidad: '', telefono: '', email: '', activo: true })
+  const [mostrarNuevaSede, setMostrarNuevaSede] = useState(false)
+  const [nuevaSede, setNuevaSede] = useState({ nombre: '', ciudad: '', direccion: '', telefono: '', email: '' })
 
   useEffect(() => { iniciar() }, [])
 
   const iniciar = async () => {
     const eid = await getEmpresaId()
     setEmpresaId(eid)
-    if (tab === 'doctores') cargarDoctores(eid)
+    cargarEmpresa(eid)
+    cargarSedes(eid)
+    cargarUsuarios(eid)
   }
 
   useEffect(() => {
     if (tab === 'doctores' && empresaId) cargarDoctores(empresaId)
   }, [tab, empresaId])
+
+  const cargarEmpresa = async (eid) => {
+    if (!eid) return
+    const { data } = await supabase.from('empresas').select('*').eq('id', eid).single()
+    if (data) setEmpresa({ nombre: data.nombre || '', email: data.email || '', ruc: data.ruc || '', telefono: data.telefono || '', direccion: data.direccion || '', ciudad: data.ciudad || '' })
+  }
+
+  const cargarSedes = async (eid) => {
+    if (!eid) return
+    const { data } = await supabase.from('sedes').select('*').eq('empresa_id', eid).order('nombre')
+    setSedes(data || [])
+  }
+
+  const cargarUsuarios = async (eid) => {
+    if (!eid) return
+    const { data } = await supabase.from('usuarios_empresas').select('*, auth.users(email)').eq('empresa_id', eid)
+    setUsuarios(data || [])
+  }
 
   const cargarDoctores = async (eid) => {
     setCargando(true)
@@ -43,6 +59,15 @@ export default function Configuracion() {
     setCargando(false)
   }
 
+  const guardarEmpresa = async () => {
+    if (!empresaId) return
+    setGuardandoEmpresa(true)
+    const { error } = await supabase.from('empresas').update(empresa).eq('id', empresaId)
+    setGuardandoEmpresa(false)
+    if (error) { alert('Error: ' + error.message); return }
+    alert('Datos guardados correctamente')
+  }
+
   const guardarDoctor = async () => {
     if (!nuevoDoctor.nombres || !nuevoDoctor.apellidos) { alert('Nombres y apellidos son obligatorios'); return }
     const { error } = await supabase.from('doctores').insert([{ ...nuevoDoctor, empresa_id: empresaId }])
@@ -50,6 +75,15 @@ export default function Configuracion() {
     setMostrarNuevoDoctor(false)
     setNuevoDoctor({ nombres: '', apellidos: '', especialidad: '', telefono: '', email: '', activo: true })
     cargarDoctores(empresaId)
+  }
+
+  const guardarSede = async () => {
+    if (!nuevaSede.nombre) { alert('El nombre es obligatorio'); return }
+    const { error } = await supabase.from('sedes').insert([{ ...nuevaSede, empresa_id: empresaId, activo: true }])
+    if (error) { alert('Error: ' + error.message); return }
+    setMostrarNuevaSede(false)
+    setNuevaSede({ nombre: '', ciudad: '', direccion: '', telefono: '', email: '' })
+    cargarSedes(empresaId)
   }
 
   const toggleActivo = async (id, activo) => {
@@ -77,11 +111,10 @@ export default function Configuracion() {
               <p className="text-xs md:text-sm text-gray-400 hidden md:block">Empresa, sedes, doctores y usuarios</p>
             </div>
           </div>
-          {tab === 'doctores' && (
-            <button onClick={() => setMostrarNuevoDoctor(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">
-              + Doctor
-            </button>
-          )}
+          <div className="flex gap-2">
+            {tab === 'doctores' && <button onClick={() => setMostrarNuevoDoctor(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Doctor</button>}
+            {tab === 'sedes' && <button onClick={() => setMostrarNuevaSede(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">+ Sede</button>}
+          </div>
         </div>
 
         <div className="p-4 md:p-8">
@@ -99,25 +132,31 @@ export default function Configuracion() {
               <div className="space-y-4 max-w-lg">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Nombre de la empresa</label>
-                  <input type="text" defaultValue="Clinica Vision Peru" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={empresa.nombre} onChange={(e) => setEmpresa({...empresa, nombre: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">RUC</label>
-                  <input type="text" defaultValue="20123456789" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={empresa.ruc} onChange={(e) => setEmpresa({...empresa, ruc: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Email</label>
-                  <input type="email" defaultValue="contacto@clinica.com" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="email" value={empresa.email} onChange={(e) => setEmpresa({...empresa, email: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Telefono</label>
-                  <input type="text" defaultValue="01-234-5678" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={empresa.telefono} onChange={(e) => setEmpresa({...empresa, telefono: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Ciudad</label>
+                  <input type="text" value={empresa.ciudad} onChange={(e) => setEmpresa({...empresa, ciudad: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Direccion</label>
-                  <input type="text" defaultValue="Av. Javier Prado 123, Lima" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={empresa.direccion} onChange={(e) => setEmpresa({...empresa, direccion: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
-                <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Guardar cambios</button>
+                <button onClick={guardarEmpresa} disabled={guardandoEmpresa} className={'text-white px-4 py-2 rounded-lg text-sm ' + (guardandoEmpresa ? 'bg-gray-600' : 'bg-blue-600 hover:bg-blue-700')}>
+                  {guardandoEmpresa ? 'Guardando...' : 'Guardar cambios'}
+                </button>
               </div>
             </div>
           )}
@@ -142,16 +181,14 @@ export default function Configuracion() {
                     {doctores.map((d) => (
                       <div key={d.id} className="p-4 flex justify-between items-center">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">{d.nombres[0]}</div>
+                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold">{d.nombres[0]}</div>
                           <div>
                             <p className="text-sm font-medium">{d.nombres} {d.apellidos}</p>
                             <p className="text-xs text-gray-400">{d.especialidad || 'Sin especialidad'}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className={'text-xs px-2 py-1 rounded-full ' + (d.activo ? 'bg-green-900 text-green-400' : 'bg-gray-800 text-gray-400')}>
-                            {d.activo ? 'Activo' : 'Inactivo'}
-                          </span>
+                          <button onClick={() => toggleActivo(d.id, d.activo)} className="text-blue-400 text-xs">{d.activo ? 'Desactivar' : 'Activar'}</button>
                           <button onClick={() => eliminarDoctor(d.id)} className="text-red-400 text-xs">🗑</button>
                         </div>
                       </div>
@@ -201,44 +238,61 @@ export default function Configuracion() {
 
           {tab === 'sedes' && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-4 md:px-6 py-4 border-b border-gray-800 flex justify-between items-center">
-                <h3 className="font-medium">Sedes</h3>
-                <button className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs md:text-sm">+ Nueva</button>
+              <div className="px-4 md:px-6 py-4 border-b border-gray-800">
+                <h3 className="font-medium">Sedes registradas</h3>
               </div>
-              <div className="divide-y divide-gray-800">
-                {sedesEjemplo.map((s) => (
-                  <div key={s.id} className="p-4 md:px-6 flex justify-between items-center">
-                    <div>
-                      <p className="text-sm font-medium">{s.nombre}</p>
-                      <p className="text-xs text-gray-400">{s.direccion} • {s.ciudad}</p>
+              {sedes.length === 0 ? (
+                <div className="text-center text-gray-400 py-12">
+                  <p className="text-sm mb-4">No hay sedes registradas</p>
+                  <button onClick={() => setMostrarNuevaSede(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Agregar sede</button>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-800">
+                  {sedes.map((s) => (
+                    <div key={s.id} className="p-4 md:px-6 flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-medium">{s.nombre}</p>
+                        <p className="text-xs text-gray-400">{s.direccion || '-'} • {s.ciudad || '-'}</p>
+                        <p className="text-xs text-gray-400">{s.telefono || ''}</p>
+                      </div>
+                      <span className={'text-xs px-2 py-1 rounded-full ' + (s.activo ? 'bg-green-900 text-green-400' : 'bg-gray-800 text-gray-400')}>
+                        {s.activo ? 'Activo' : 'Inactivo'}
+                      </span>
                     </div>
-                    <span className="bg-green-900 text-green-400 text-xs px-2 py-1 rounded-full">Activo</span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {tab === 'usuarios' && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-4 md:px-6 py-4 border-b border-gray-800 flex justify-between items-center">
-                <h3 className="font-medium">Usuarios</h3>
-                <button className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs md:text-sm">+ Nuevo</button>
+              <div className="px-4 md:px-6 py-4 border-b border-gray-800">
+                <h3 className="font-medium">Usuarios del sistema</h3>
+                <p className="text-xs text-gray-400 mt-1">Para agregar usuarios contacta al administrador</p>
               </div>
-              <div className="divide-y divide-gray-800">
-                {usuariosEjemplo.map((u) => (
-                  <div key={u.id} className="p-4 md:px-6 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold">{u.nombre[0]}</div>
-                      <div>
-                        <p className="text-sm font-medium">{u.nombre}</p>
-                        <p className="text-xs text-gray-400">{u.email}</p>
+              {usuarios.length === 0 ? (
+                <div className="text-center text-gray-400 py-12">
+                  <p className="text-sm">No hay usuarios registrados</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-800">
+                  {usuarios.map((u) => (
+                    <div key={u.id} className="p-4 md:px-6 flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold">A</div>
+                        <div>
+                          <p className="text-sm font-medium">Usuario {u.rol}</p>
+                          <p className="text-xs text-gray-400">{u.rol}</p>
+                        </div>
                       </div>
+                      <span className={'text-xs px-2 py-1 rounded-full ' + (u.activo ? 'bg-green-900 text-green-400' : 'bg-gray-800 text-gray-400')}>
+                        {u.activo ? 'Activo' : 'Inactivo'}
+                      </span>
                     </div>
-                    <span className="bg-purple-900 text-purple-400 text-xs px-2 py-1 rounded-full">{u.rol}</span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -248,7 +302,7 @@ export default function Configuracion() {
               <div className="space-y-4">
                 {[
                   { rol: 'Admin', permisos: ['Dashboard', 'Clientes', 'Agenda', 'Ventas', 'Control ventas', 'Inventario', 'Finanzas', 'Reportes', 'Config'] },
-                  { rol: 'Doctor', permisos: ['Dashboard', 'Clientes', 'Agenda', 'Consulta'] },
+                  { rol: 'Doctor', permisos: ['Dashboard', 'Clientes', 'Agenda'] },
                   { rol: 'Vendedor', permisos: ['Dashboard', 'Clientes', 'Ventas', 'Control ventas', 'Inventario'] },
                   { rol: 'Recepcion', permisos: ['Dashboard', 'Clientes', 'Agenda'] },
                 ].map((r) => (
@@ -303,6 +357,45 @@ export default function Configuracion() {
             <div className="flex gap-3 mt-6">
               <button onClick={() => setMostrarNuevoDoctor(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
               <button onClick={guardarDoctor} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mostrarNuevaSede && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold">Nueva sede</h3>
+              <button onClick={() => setMostrarNuevaSede(false)} className="text-gray-400 hover:text-white text-xl">X</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Nombre</label>
+                <input type="text" value={nuevaSede.nombre} onChange={(e) => setNuevaSede({...nuevaSede, nombre: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Ciudad</label>
+                  <input type="text" value={nuevaSede.ciudad} onChange={(e) => setNuevaSede({...nuevaSede, ciudad: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Telefono</label>
+                  <input type="text" value={nuevaSede.telefono} onChange={(e) => setNuevaSede({...nuevaSede, telefono: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Direccion</label>
+                <input type="text" value={nuevaSede.direccion} onChange={(e) => setNuevaSede({...nuevaSede, direccion: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Email</label>
+                <input type="email" value={nuevaSede.email} onChange={(e) => setNuevaSede({...nuevaSede, email: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setMostrarNuevaSede(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
+              <button onClick={guardarSede} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar sede</button>
             </div>
           </div>
         </div>
