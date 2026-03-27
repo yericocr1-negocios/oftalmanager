@@ -1,35 +1,111 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from '../../components/Sidebar'
+import { supabase, getEmpresaId } from '../../lib/supabase'
 
-const ventasPorDia = [
-  { dia: 'Lun', ventas: 1200 },
-  { dia: 'Mar', ventas: 1800 },
-  { dia: 'Mie', ventas: 950 },
-  { dia: 'Jue', ventas: 2100 },
-  { dia: 'Vie', ventas: 2800 },
-  { dia: 'Sab', ventas: 3200 },
-  { dia: 'Dom', ventas: 400 },
-]
-
-const ventasPorDoctor = [
-  { nombre: 'Dr. Garcia', ventas: 45, monto: 8500 },
-  { nombre: 'Dra. Torres', ventas: 38, monto: 7200 },
-  { nombre: 'Dr. Mendoza', ventas: 22, monto: 4100 },
-]
-
-const ventasPorProducto = [
-  { nombre: 'Luna Antireflex Premium', cantidad: 28, monto: 7840 },
-  { nombre: 'Montura Ray-Ban', cantidad: 15, monto: 5250 },
-  { nombre: 'Consulta Especializada', cantidad: 42, monto: 5040 },
-  { nombre: 'Luna Fotocrom', cantidad: 18, monto: 5760 },
-  { nombre: 'Cirugia Catarata', cantidad: 3, monto: 7500 },
-]
-
-const maxVenta = Math.max(...ventasPorDia.map(v => v.ventas))
+const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
 export default function Reportes() {
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [cargando, setCargando] = useState(true)
+  const [empresaId, setEmpresaId] = useState(null)
+  const [ventasDia, setVentasDia] = useState([])
+  const [ventasMes, setVentasMes] = useState([])
+  const [ventasEsp, setVentasEsp] = useState([])
+  const [modoDia, setModoDia] = useState('dia')
+  const [modoDetalle, setModoDetalle] = useState('doctor')
+  const [totalIngresos, setTotalIngresos] = useState(0)
+  const [totalVentas, setTotalVentas] = useState(0)
+  const [ticketPromedio, setTicketPromedio] = useState(0)
+
+  useEffect(() => { iniciar() }, [])
+
+  const iniciar = async () => {
+    const eid = await getEmpresaId()
+    setEmpresaId(eid)
+    cargarDatos(eid)
+  }
+
+  const cargarDatos = async (eid) => {
+    setCargando(true)
+
+    const hoy = new Date()
+    const inicioSemana = new Date(hoy)
+    inicioSemana.setDate(hoy.getDate() - 6)
+
+    const cajaQuery = supabase.from('caja').select('*').eq('tipo', 'ingreso').gte('fecha', inicioSemana.toISOString())
+    if (eid) {
+      const { data: sedes } = await supabase.from('sedes').select('id').eq('empresa_id', eid)
+      if (sedes && sedes.length > 0) {
+        cajaQuery.in('sede_id', sedes.map(s => s.id))
+      }
+    }
+    const { data: cajaData } = await cajaQuery
+
+    const diasSemana = []
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(hoy)
+      d.setDate(hoy.getDate() - i)
+      const diaStr = d.toISOString().split('T')[0]
+      const nombre = ['Dom','Lun','Mar','Mie','Jue','Vie','Sab'][d.getDay()]
+      const total = (cajaData || []).filter(m => m.fecha?.startsWith(diaStr)).reduce((sum, m) => sum + m.monto, 0)
+      diasSemana.push({ dia: nombre, ventas: total, fecha: diaStr })
+    }
+    setVentasDia(diasSemana)
+    setTotalIngresos((cajaData || []).reduce((sum, m) => sum + m.monto, 0))
+
+    const espQuery = supabase.from('ventas_especializadas').select('*')
+    if (eid) espQuery.eq('empresa_id', eid)
+    const { data: espData } = await espQuery
+    setVentasEsp(espData || [])
+    setTotalVentas((espData || []).length)
+    setTicketPromedio((espData || []).length > 0 ? Math.round((espData || []).reduce((sum, v) => sum + (v.monto || 0), 0) / (espData || []).length) : 0)
+
+    const ventasPorMes = meses.map(mes => ({
+      mes,
+      ventas: (espData || []).filter(v => v.mes === mes).reduce((sum, v) => sum + (v.monto || 0), 0)
+    }))
+    setVentasMes(ventasPorMes)
+
+    setCargando(false)
+  }
+
+  const getDetalleData = () => {
+    if (modoDetalle === 'doctor') {
+      const porDoctor = {}
+      ventasEsp.forEach(v => {
+        const key = v.vendedor || 'Sin vendedor'
+        if (!porDoctor[key]) porDoctor[key] = { nombre: key, ventas: 0, monto: 0 }
+        porDoctor[key].ventas++
+        porDoctor[key].monto += v.monto || 0
+      })
+      return Object.values(porDoctor).sort((a, b) => b.monto - a.monto).slice(0, 5)
+    } else if (modoDetalle === 'ciudad') {
+      const porCiudad = {}
+      ventasEsp.forEach(v => {
+        const key = v.ciudad || 'Sin ciudad'
+        if (!porCiudad[key]) porCiudad[key] = { nombre: key, ventas: 0, monto: 0 }
+        porCiudad[key].ventas++
+        porCiudad[key].monto += v.monto || 0
+      })
+      return Object.values(porCiudad).sort((a, b) => b.monto - a.monto).slice(0, 5)
+    } else {
+      const porVendedor = {}
+      ventasEsp.forEach(v => {
+        const key = v.vendedor || 'Sin vendedor'
+        if (!porVendedor[key]) porVendedor[key] = { nombre: key, ventas: 0, monto: 0 }
+        porVendedor[key].ventas++
+        porVendedor[key].monto += v.monto || 0
+      })
+      return Object.values(porVendedor).sort((a, b) => b.monto - a.monto).slice(0, 5)
+    }
+  }
+
+  const detalleData = getDetalleData()
+  const maxDetalle = detalleData.length > 0 ? Math.max(...detalleData.map(d => d.monto)) : 1
+
+  const datosGrafico = modoDia === 'dia' ? ventasDia : ventasMes.filter(m => m.ventas > 0)
+  const maxGrafico = datosGrafico.length > 0 ? Math.max(...datosGrafico.map(v => modoDia === 'dia' ? v.ventas : v.ventas), 1) : 1
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
@@ -39,101 +115,135 @@ export default function Reportes() {
           <button onClick={() => setMenuAbierto(!menuAbierto)} className="md:hidden text-gray-400 hover:text-white text-xl">☰</button>
           <div>
             <h2 className="text-base md:text-lg font-semibold">Reportes</h2>
-            <p className="text-xs md:text-sm text-gray-400">Resumen de la semana</p>
+            <p className="text-xs md:text-sm text-gray-400">Datos en tiempo real</p>
           </div>
         </div>
 
         <div className="p-4 md:p-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
-            {[
-              { label: 'Ingresos semana', value: 'S/ 12,450', color: 'text-green-400', icon: '💰' },
-              { label: 'Total ventas', value: '105', color: 'text-blue-400', icon: '🛒' },
-              { label: 'Ticket promedio', value: 'S/ 118', color: 'text-purple-400', icon: '🎫' },
-              { label: 'Crecimiento', value: '+18%', color: 'text-yellow-400', icon: '📈' },
-            ].map((card) => (
-              <div key={card.label} className="bg-gray-900 border border-gray-800 rounded-xl p-3 md:p-5">
-                <div className="flex justify-between items-start mb-2">
-                  <p className="text-xs text-gray-400">{card.label}</p>
-                  <span className="text-base md:text-xl">{card.icon}</span>
-                </div>
-                <p className={'text-lg md:text-2xl font-bold ' + card.color}>{card.value}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
-              <h3 className="font-semibold mb-4 md:mb-6 text-sm md:text-base">Ventas por dia</h3>
-              <div className="flex items-end gap-2 md:gap-3 h-32 md:h-40">
-                {ventasPorDia.map((v) => (
-                  <div key={v.dia} className="flex-1 flex flex-col items-center gap-1 md:gap-2">
-                    <p className="text-xs text-gray-400 hidden md:block">S/{v.ventas}</p>
-                    <div className="w-full bg-blue-600 rounded-t-md" style={{ height: (v.ventas / maxVenta * 100) + '%' }}></div>
-                    <p className="text-xs text-gray-400">{v.dia}</p>
+          {cargando ? (
+            <div className="text-center text-gray-400 py-12">Cargando reportes...</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
+                {[
+                  { label: 'Ingresos semana', value: 'S/ ' + totalIngresos.toLocaleString(), color: 'text-green-400', icon: '💰' },
+                  { label: 'Total ventas esp.', value: totalVentas.toString(), color: 'text-blue-400', icon: '🛒' },
+                  { label: 'Ticket promedio', value: 'S/ ' + ticketPromedio.toLocaleString(), color: 'text-purple-400', icon: '🎫' },
+                  { label: 'Meses con ventas', value: ventasMes.filter(m => m.ventas > 0).length.toString(), color: 'text-yellow-400', icon: '📅' },
+                ].map((card) => (
+                  <div key={card.label} className="bg-gray-900 border border-gray-800 rounded-xl p-3 md:p-5">
+                    <div className="flex justify-between items-start mb-2">
+                      <p className="text-xs text-gray-400">{card.label}</p>
+                      <span className="text-base md:text-xl">{card.icon}</span>
+                    </div>
+                    <p className={'text-lg md:text-2xl font-bold ' + card.color}>{card.value}</p>
                   </div>
                 ))}
               </div>
-            </div>
 
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
-              <h3 className="font-semibold mb-4 text-sm md:text-base">Ventas por doctor</h3>
-              <div className="space-y-3 md:space-y-4">
-                {ventasPorDoctor.map((d) => (
-                  <div key={d.nombre}>
-                    <div className="flex justify-between text-xs md:text-sm mb-1">
-                      <span>{d.nombre}</span>
-                      <span className="text-green-400">S/ {d.monto.toLocaleString()}</span>
-                    </div>
-                    <div className="w-full bg-gray-800 rounded-full h-2">
-                      <div className="bg-blue-600 h-2 rounded-full" style={{ width: (d.monto / 8500 * 100) + '%' }}></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+                  <div className="flex justify-between items-center mb-4 md:mb-6">
+                    <h3 className="font-semibold text-sm md:text-base">Ventas por {modoDia === 'dia' ? 'dia' : 'mes'}</h3>
+                    <div className="flex gap-2">
+                      <button onClick={() => setModoDia('dia')} className={'px-2 md:px-3 py-1 rounded-lg text-xs ' + (modoDia === 'dia' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400')}>Por dia</button>
+                      <button onClick={() => setModoDia('mes')} className={'px-2 md:px-3 py-1 rounded-lg text-xs ' + (modoDia === 'mes' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400')}>Por mes</button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
-            <h3 className="font-semibold mb-4 text-sm md:text-base">Productos mas rentables</h3>
-            <div className="md:hidden space-y-3">
-              {ventasPorProducto.map((p) => (
-                <div key={p.nombre} className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-medium">{p.nombre}</p>
-                    <p className="text-xs text-gray-400">{p.cantidad} unidades</p>
-                  </div>
-                  <span className="text-green-400 font-bold text-sm">S/ {p.monto.toLocaleString()}</span>
+                  {datosGrafico.length === 0 ? (
+                    <div className="text-center text-gray-500 text-sm py-8">No hay datos disponibles</div>
+                  ) : (
+                    <div className="flex items-end gap-1 md:gap-2 h-32 md:h-40">
+                      {datosGrafico.map((v, i) => {
+                        const valor = modoDia === 'dia' ? v.ventas : v.ventas
+                        return (
+                          <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                            <p className="text-xs text-gray-500 hidden md:block">S/{valor.toLocaleString()}</p>
+                            <div
+                              className="w-full bg-blue-600 rounded-t-md transition-all"
+                              style={{ height: valor > 0 ? Math.max((valor / maxGrafico * 100), 5) + '%' : '2px', opacity: valor > 0 ? 1 : 0.3 }}
+                            ></div>
+                            <p className="text-xs text-gray-400 truncate w-full text-center">{modoDia === 'dia' ? v.dia : v.mes?.slice(0,3)}</p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-            <table className="w-full hidden md:table">
-              <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="text-left py-3 text-xs text-gray-400 uppercase">Producto</th>
-                  <th className="text-left py-3 text-xs text-gray-400 uppercase">Cantidad</th>
-                  <th className="text-left py-3 text-xs text-gray-400 uppercase">Ingresos</th>
-                  <th className="text-left py-3 text-xs text-gray-400 uppercase">Participacion</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ventasPorProducto.map((p) => (
-                  <tr key={p.nombre} className="border-b border-gray-800">
-                    <td className="py-3 text-sm">{p.nombre}</td>
-                    <td className="py-3 text-sm text-gray-300">{p.cantidad}</td>
-                    <td className="py-3 text-sm text-green-400">S/ {p.monto.toLocaleString()}</td>
-                    <td className="py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-gray-800 rounded-full h-2">
-                          <div className="bg-green-600 h-2 rounded-full" style={{ width: (p.monto / 7840 * 100) + '%' }}></div>
+
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold text-sm md:text-base">
+                      {modoDetalle === 'doctor' ? 'Por vendedor' : modoDetalle === 'ciudad' ? 'Por ciudad' : 'Por vendedor'}
+                    </h3>
+                    <div className="flex gap-1">
+                      <button onClick={() => setModoDetalle('doctor')} className={'px-2 py-1 rounded-lg text-xs ' + (modoDetalle === 'doctor' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400')}>Vendedor</button>
+                      <button onClick={() => setModoDetalle('ciudad')} className={'px-2 py-1 rounded-lg text-xs ' + (modoDetalle === 'ciudad' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400')}>Ciudad</button>
+                    </div>
+                  </div>
+                  {detalleData.length === 0 ? (
+                    <div className="text-center text-gray-500 text-sm py-8">No hay datos disponibles</div>
+                  ) : (
+                    <div className="space-y-3 md:space-y-4">
+                      {detalleData.map((d, i) => (
+                        <div key={i}>
+                          <div className="flex justify-between text-xs md:text-sm mb-1">
+                            <span className="truncate mr-2">{d.nombre}</span>
+                            <span className="text-green-400 flex-shrink-0">S/ {d.monto.toLocaleString()}</span>
+                          </div>
+                          <div className="w-full bg-gray-800 rounded-full h-2">
+                            <div className="bg-blue-600 h-2 rounded-full" style={{ width: (d.monto / maxDetalle * 100) + '%' }}></div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">{d.ventas} ventas</p>
                         </div>
-                        <span className="text-xs text-gray-400">{Math.round(p.monto / 7840 * 100)}%</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+                <h3 className="font-semibold mb-4 text-sm md:text-base">Ventas por mes (Control de ventas)</h3>
+                {ventasMes.every(m => m.ventas === 0) ? (
+                  <div className="text-center text-gray-500 text-sm py-8">No hay ventas especializadas registradas</div>
+                ) : (
+                  <div className="md:hidden space-y-2">
+                    {ventasMes.filter(m => m.ventas > 0).map((m) => (
+                      <div key={m.mes} className="flex justify-between items-center">
+                        <span className="text-sm">{m.mes}</span>
+                        <span className="text-green-400 font-bold text-sm">S/ {m.ventas.toLocaleString()}</span>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    ))}
+                  </div>
+                )}
+                <table className="w-full hidden md:table">
+                  <thead>
+                    <tr className="border-b border-gray-800">
+                      <th className="text-left py-3 text-xs text-gray-400 uppercase">Mes</th>
+                      <th className="text-left py-3 text-xs text-gray-400 uppercase">Ingresos</th>
+                      <th className="text-left py-3 text-xs text-gray-400 uppercase">Participacion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ventasMes.filter(m => m.ventas > 0).map((m) => (
+                      <tr key={m.mes} className="border-b border-gray-800">
+                        <td className="py-3 text-sm">{m.mes}</td>
+                        <td className="py-3 text-sm text-green-400">S/ {m.ventas.toLocaleString()}</td>
+                        <td className="py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-gray-800 rounded-full h-2">
+                              <div className="bg-green-600 h-2 rounded-full" style={{ width: (m.ventas / Math.max(...ventasMes.map(x => x.ventas), 1) * 100) + '%' }}></div>
+                            </div>
+                            <span className="text-xs text-gray-400">{Math.round(m.ventas / Math.max(ventasMes.reduce((s, x) => s + x.ventas, 0), 1) * 100)}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
