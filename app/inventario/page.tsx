@@ -11,13 +11,19 @@ export default function Inventario() {
   const [tab, setTab] = useState('productos')
   const [productoSeleccionado, setProductoSeleccionado] = useState<any>(null)
   const [mostrarNuevo, setMostrarNuevo] = useState(false)
+  const [mostrarNuevaCategoria, setMostrarNuevaCategoria] = useState(false)
   const [nuevaCategoria, setNuevaCategoria] = useState('')
   const [editandoCategoria, setEditandoCategoria] = useState<any>(null)
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [empresaId, setEmpresaId] = useState<string|null>(null)
   const [cargando, setCargando] = useState(true)
+  const [guardandoProducto, setGuardandoProducto] = useState(false)
+  const [imagenPreview, setImagenPreview] = useState<string|null>(null)
   const [nuevoProducto, setNuevoProducto] = useState({
-    codigo: '', nombre: '', categoria: '', stock: 0, minimo: 5, costo: 0, precio: 0, unidad: 'unidad'
+    codigo: '', nombre: '', linea_marca: '', material: '', color: '', talla: '',
+    categoria: '', unidad: 'unidad', stock: 0, minimo: 5, costo: 0, precio: 0,
+    referencia_interna: '', codigo_osce: '', codigo_barras: '', detraccion: false,
+    imagen_url: ''
   })
 
   useEffect(() => { iniciar() }, [])
@@ -48,14 +54,30 @@ export default function Inventario() {
     return coincideBusqueda && coincideFiltro
   })
 
+  const handleImagen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => setImagenPreview(ev.target?.result as string)
+    reader.readAsDataURL(file)
+  }
+
   const guardarProducto = async () => {
     if (!nuevoProducto.nombre) { alert('El nombre es obligatorio'); return }
+    setGuardandoProducto(true)
     const margen = nuevoProducto.costo > 0 ? Math.round(((nuevoProducto.precio - nuevoProducto.costo) / nuevoProducto.costo) * 100) : 0
-    const { data, error } = await supabase.from('productos').insert([{ ...nuevoProducto, empresa_id: empresaId, margen }]).select().single()
-    if (error) { alert('Error: ' + error.message); return }
+    const { data, error } = await supabase.from('productos').insert([{
+      ...nuevoProducto,
+      empresa_id: empresaId,
+      margen,
+      imagen_url: imagenPreview || ''
+    }]).select().single()
+    if (error) { alert('Error: ' + error.message); setGuardandoProducto(false); return }
     setProductos([...productos, data])
     setMostrarNuevo(false)
-    setNuevoProducto({ codigo: '', nombre: '', categoria: '', stock: 0, minimo: 5, costo: 0, precio: 0, unidad: 'unidad' })
+    setGuardandoProducto(false)
+    setImagenPreview(null)
+    setNuevoProducto({ codigo: '', nombre: '', linea_marca: '', material: '', color: '', talla: '', categoria: '', unidad: 'unidad', stock: 0, minimo: 5, costo: 0, precio: 0, referencia_interna: '', codigo_osce: '', codigo_barras: '', detraccion: false, imagen_url: '' })
   }
 
   const eliminarProducto = async (id: string) => {
@@ -66,11 +88,12 @@ export default function Inventario() {
   }
 
   const guardarCategoria = async () => {
-    if (!nuevaCategoria.trim()) return
+    if (!nuevaCategoria.trim()) { alert('Escribe el nombre de la categoria'); return }
     const { data, error } = await supabase.from('categorias_productos').insert([{ nombre: nuevaCategoria.trim(), empresa_id: empresaId }]).select().single()
     if (error) { alert('Error: ' + error.message); return }
     setCategorias([...categorias, data])
     setNuevaCategoria('')
+    setMostrarNuevaCategoria(false)
   }
 
   const actualizarCategoria = async (id: string, nombre: string) => {
@@ -115,16 +138,34 @@ export default function Inventario() {
             <button onClick={() => eliminarProducto(p.id)} className="text-red-400 hover:text-red-300 text-sm">🗑 Eliminar</button>
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-8">
-            <h2 className="text-xl md:text-3xl font-bold mb-1">{p.nombre}</h2>
-            <p className="text-gray-400 text-sm mb-6">Codigo: {p.codigo || '-'}</p>
+            <div className="flex gap-6 mb-6">
+              {p.imagen_url ? (
+                <img src={p.imagen_url} alt={p.nombre} className="w-24 h-24 object-cover rounded-xl border border-gray-700" />
+              ) : (
+                <div className="w-24 h-24 rounded-xl border border-gray-700 bg-gray-800 flex items-center justify-center text-4xl">📦</div>
+              )}
+              <div>
+                <h2 className="text-xl md:text-3xl font-bold mb-1">{p.nombre}</h2>
+                <p className="text-gray-400 text-sm">Codigo: {p.codigo || '-'}</p>
+              </div>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
               {[
                 { label: 'Categoria', value: p.categoria || '-' },
+                { label: 'Linea / Marca', value: p.linea_marca || '-' },
+                { label: 'Material', value: p.material || '-' },
+                { label: 'Color', value: p.color || '-' },
+                { label: 'Talla', value: p.talla || '-' },
+                { label: 'Unidad', value: p.unidad || 'unidad' },
                 { label: 'Stock actual', value: (p.stock || 0) + ' ' + (p.unidad || 'unidad') },
                 { label: 'Stock minimo', value: (p.minimo || 0) + ' ' + (p.unidad || 'unidad') },
-                { label: 'Precio venta', value: 'S/ ' + (p.precio || 0) },
                 { label: 'Precio costo', value: 'S/ ' + (p.costo || 0) },
+                { label: 'Precio venta', value: 'S/ ' + (p.precio || 0) },
                 { label: 'Margen', value: (p.margen || 0) + '%' },
+                { label: 'Referencia interna', value: p.referencia_interna || '-' },
+                { label: 'Codigo OSCE', value: p.codigo_osce || '-' },
+                { label: 'Codigo de barras', value: p.codigo_barras || '-' },
+                { label: 'Detraccion', value: p.detraccion ? 'Si' : 'No' },
               ].map((item) => (
                 <div key={item.label} className="bg-gray-800 rounded-lg p-3">
                   <p className="text-xs text-gray-400 mb-1">{item.label}</p>
@@ -210,10 +251,17 @@ export default function Inventario() {
                   <div className="md:hidden space-y-2">
                     {filtrados.map((p) => (
                       <div key={p.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex justify-between items-center">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{p.nombre}</p>
-                          <p className="text-xs text-gray-400">{p.codigo || '-'} • {p.categoria || '-'}</p>
-                          <p className="text-xs mt-1">S/ {p.precio || 0} • <span className={(p.stock||0) <= (p.minimo||0) ? 'text-red-400' : 'text-green-400'}>Stock: {p.stock || 0}</span></p>
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          {p.imagen_url ? (
+                            <img src={p.imagen_url} alt={p.nombre} className="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-xl flex-shrink-0">📦</div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{p.nombre}</p>
+                            <p className="text-xs text-gray-400">{p.categoria || '-'}</p>
+                            <p className="text-xs mt-1">S/ {p.precio || 0} • <span className={(p.stock||0) <= (p.minimo||0) ? 'text-red-400' : 'text-green-400'}>Stock: {p.stock || 0}</span></p>
+                          </div>
                         </div>
                         <div className="flex gap-2 ml-3">
                           <button onClick={() => setProductoSeleccionado(p)} className="text-blue-400 text-xs">Ver</button>
@@ -227,13 +275,10 @@ export default function Inventario() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-800">
-                          <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Codigo</th>
                           <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Producto</th>
                           <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Categoria</th>
                           <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Stock</th>
-                          <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Costo</th>
                           <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Precio</th>
-                          <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Margen</th>
                           <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Estado</th>
                           <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase"></th>
                         </tr>
@@ -241,16 +286,25 @@ export default function Inventario() {
                       <tbody>
                         {filtrados.map((p) => (
                           <tr key={p.id} className="border-b border-gray-800 hover:bg-gray-800">
-                            <td className="px-4 py-3 text-xs text-gray-400 font-mono">{p.codigo || '-'}</td>
-                            <td className="px-4 py-3 text-sm font-medium">{p.nombre}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                {p.imagen_url ? (
+                                  <img src={p.imagen_url} alt={p.nombre} className="w-8 h-8 object-cover rounded" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded bg-gray-800 flex items-center justify-center text-sm">📦</div>
+                                )}
+                                <div>
+                                  <p className="text-sm font-medium">{p.nombre}</p>
+                                  <p className="text-xs text-gray-400">{p.codigo || '-'}</p>
+                                </div>
+                              </div>
+                            </td>
                             <td className="px-4 py-3 text-sm text-gray-300">{p.categoria || '-'}</td>
                             <td className="px-4 py-3">
                               <span className={'text-sm font-bold ' + ((p.stock||0) <= (p.minimo||0) ? 'text-red-400' : 'text-green-400')}>{p.stock || 0}</span>
                               <span className="text-xs text-gray-500"> {p.unidad || 'unidad'}</span>
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-300">S/ {p.costo || 0}</td>
                             <td className="px-4 py-3 text-sm font-medium">S/ {p.precio || 0}</td>
-                            <td className="px-4 py-3 text-sm text-green-400">{p.margen || 0}%</td>
                             <td className="px-4 py-3">
                               {(p.stock||0) <= (p.minimo||0) ? (
                                 <span className="bg-red-900 text-red-400 text-xs px-2 py-1 rounded-full">Stock bajo</span>
@@ -274,28 +328,22 @@ export default function Inventario() {
 
           {tab === 'categorias' && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
-              <h3 className="font-semibold mb-4 md:mb-6">Categorias</h3>
-              <div className="flex gap-3 mb-4 md:mb-6">
-                <input type="text" placeholder="Nueva categoria..." value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && guardarCategoria()} className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                <button onClick={guardarCategoria} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Agregar</button>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-semibold">Categorias</h3>
+                <button onClick={() => setMostrarNuevaCategoria(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nueva categoria</button>
               </div>
               {categorias.length === 0 ? (
                 <div className="text-center text-gray-400 py-8">
-                  <p className="text-sm">No hay categorias. Agrega una arriba.</p>
+                  <p className="text-4xl mb-4">🏷</p>
+                  <p className="text-sm mb-4">No hay categorias</p>
+                  <button onClick={() => setMostrarNuevaCategoria(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Agregar categoria</button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {categorias.map((cat) => (
                     <div key={cat.id} className="bg-gray-800 border border-gray-700 rounded-xl p-3 md:p-4 flex justify-between items-center">
                       {editandoCategoria?.id === cat.id ? (
-                        <input
-                          type="text"
-                          value={editandoCategoria.nombre}
-                          onChange={(e) => setEditandoCategoria({...editandoCategoria, nombre: e.target.value})}
-                          onKeyDown={(e) => e.key === 'Enter' && actualizarCategoria(cat.id, editandoCategoria.nombre)}
-                          className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500 mr-2"
-                          autoFocus
-                        />
+                        <input type="text" value={editandoCategoria.nombre} onChange={(e) => setEditandoCategoria({...editandoCategoria, nombre: e.target.value})} onKeyDown={(e) => e.key === 'Enter' && actualizarCategoria(cat.id, editandoCategoria.nombre)} className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500 mr-2" autoFocus />
                       ) : (
                         <div>
                           <p className="font-medium text-sm">{cat.nombre}</p>
@@ -305,7 +353,7 @@ export default function Inventario() {
                       <div className="flex gap-2 flex-shrink-0">
                         {editandoCategoria?.id === cat.id ? (
                           <>
-                            <button onClick={() => actualizarCategoria(cat.id, editandoCategoria.nombre)} className="text-green-400 hover:text-green-300 text-xs">✓ Guardar</button>
+                            <button onClick={() => actualizarCategoria(cat.id, editandoCategoria.nombre)} className="text-green-400 hover:text-green-300 text-xs">✓</button>
                             <button onClick={() => setEditandoCategoria(null)} className="text-gray-400 hover:text-gray-300 text-xs">✕</button>
                           </>
                         ) : (
@@ -324,22 +372,75 @@ export default function Inventario() {
         </div>
       </div>
 
+      {mostrarNuevaCategoria && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold">Nueva categoria</h3>
+              <button onClick={() => setMostrarNuevaCategoria(false)} className="text-gray-400 hover:text-white text-xl">X</button>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Nombre de la categoria</label>
+              <input type="text" value={nuevaCategoria} onChange={(e) => setNuevaCategoria(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && guardarCategoria()} placeholder="ej: Monturas, Lunas, Servicios..." className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" autoFocus />
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setMostrarNuevaCategoria(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
+              <button onClick={guardarCategoria} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {mostrarNuevo && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg max-h-screen overflow-y-auto">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold">Nuevo producto</h3>
               <button onClick={() => setMostrarNuevo(false)} className="text-gray-400 hover:text-white text-xl">X</button>
             </div>
             <div className="space-y-4">
+              <div className="flex justify-center mb-4">
+                <div className="relative">
+                  {imagenPreview ? (
+                    <img src={imagenPreview} alt="Preview" className="w-24 h-24 object-cover rounded-xl border border-gray-600" />
+                  ) : (
+                    <div className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-600 flex flex-col items-center justify-center bg-gray-800 cursor-pointer hover:border-blue-500 transition-colors">
+                      <span className="text-2xl">📷</span>
+                      <span className="text-xs text-gray-400 mt-1">Subir imagen</span>
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" onChange={handleImagen} className="absolute inset-0 opacity-0 cursor-pointer" />
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Codigo</label>
                   <input type="text" value={nuevoProducto.codigo} onChange={(e) => setNuevoProducto({...nuevoProducto, codigo: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Nombre</label>
+                  <label className="text-xs text-gray-400 mb-1 block">Nombre *</label>
                   <input type="text" value={nuevoProducto.nombre} onChange={(e) => setNuevoProducto({...nuevoProducto, nombre: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Linea / Marca</label>
+                  <input type="text" value={nuevoProducto.linea_marca} onChange={(e) => setNuevoProducto({...nuevoProducto, linea_marca: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Material</label>
+                  <input type="text" value={nuevoProducto.material} onChange={(e) => setNuevoProducto({...nuevoProducto, material: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Color</label>
+                  <input type="text" value={nuevoProducto.color} onChange={(e) => setNuevoProducto({...nuevoProducto, color: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Talla</label>
+                  <input type="text" value={nuevoProducto.talla} onChange={(e) => setNuevoProducto({...nuevoProducto, talla: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -366,7 +467,7 @@ export default function Inventario() {
                   <input type="number" value={nuevoProducto.stock} onChange={(e) => setNuevoProducto({...nuevoProducto, stock: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Stock minimo</label>
+                  <label className="text-xs text-gray-400 mb-1 block">Stock minimo alerta</label>
                   <input type="number" value={nuevoProducto.minimo} onChange={(e) => setNuevoProducto({...nuevoProducto, minimo: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
@@ -380,10 +481,30 @@ export default function Inventario() {
                   <input type="number" value={nuevoProducto.precio} onChange={(e) => setNuevoProducto({...nuevoProducto, precio: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Referencia interna</label>
+                  <input type="text" value={nuevoProducto.referencia_interna} onChange={(e) => setNuevoProducto({...nuevoProducto, referencia_interna: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Codigo OSCE</label>
+                  <input type="text" value={nuevoProducto.codigo_osce} onChange={(e) => setNuevoProducto({...nuevoProducto, codigo_osce: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Codigo de barras</label>
+                <input type="text" value={nuevoProducto.codigo_barras} onChange={(e) => setNuevoProducto({...nuevoProducto, codigo_barras: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="detraccion" checked={nuevoProducto.detraccion} onChange={(e) => setNuevoProducto({...nuevoProducto, detraccion: e.target.checked})} className="w-4 h-4" />
+                <label htmlFor="detraccion" className="text-sm text-gray-300">Aplica detraccion</label>
+              </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setMostrarNuevo(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
-              <button onClick={guardarProducto} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
+              <button onClick={guardarProducto} disabled={guardandoProducto} className={'flex-1 text-white py-2 rounded-lg text-sm font-medium ' + (guardandoProducto ? 'bg-gray-600' : 'bg-blue-600 hover:bg-blue-700')}>
+                {guardandoProducto ? 'Guardando...' : 'Guardar producto'}
+              </button>
             </div>
           </div>
         </div>

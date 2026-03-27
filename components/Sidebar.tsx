@@ -11,7 +11,6 @@ const menu = [
   { icon: '💳', label: 'Finanzas', href: '/finanzas' },
   { icon: '📈', label: 'Reportes', href: '/reportes' },
   { icon: '⚙️', label: 'Config', href: '/configuracion' },
-  { icon: '🔧', label: 'Panel Admin', href: '/admin' },
 ]
 
 export default function Sidebar({ menuAbierto = false, setMenuAbierto = null }: { menuAbierto?: boolean, setMenuAbierto?: any }) {
