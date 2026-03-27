@@ -13,18 +13,24 @@ export default function Login() {
     setCargando(true)
     setError('')
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password.trim()
+      })
 
-    if (error) {
-      setError('Error: ' + error.message)
-      setCargando(false)
-      return
-    }
+      if (error) {
+        setError('Email o contraseña incorrectos')
+        setCargando(false)
+        return
+      }
 
-    if (data.session) {
-      setTimeout(() => {
+      if (data.session) {
         window.location.href = '/'
-      }, 500)
+      }
+    } catch (e) {
+      setError('Error de conexion. Intenta de nuevo.')
+      setCargando(false)
     }
   }
 
@@ -33,10 +39,10 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-blue-400">👁️ OFTALMANAGER</h1>
-          <p className="text-gray-400 mt-2">Sistema de gestion clinica</p>
+          <p className="text-gray-400 mt-2 text-sm">Sistema de gestion clinica</p>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-8">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 md:p-8">
           <h2 className="text-xl font-semibold text-white mb-6">Iniciar sesion</h2>
 
           {error && (
@@ -53,6 +59,9 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu@email.com"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="email"
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -63,6 +72,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                autoComplete="current-password"
                 onKeyDown={(e) => e.key === 'Enter' && iniciarSesion()}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
               />
@@ -72,7 +82,7 @@ export default function Login() {
           <button
             onClick={iniciarSesion}
             disabled={cargando}
-            className={'w-full mt-6 py-3 rounded-lg font-medium text-white transition-all ' + (cargando ? 'bg-gray-600' : 'bg-blue-600 hover:bg-blue-700')}
+            className={'w-full mt-6 py-4 rounded-lg font-medium text-white text-base transition-all ' + (cargando ? 'bg-gray-600' : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800')}
           >
             {cargando ? 'Iniciando sesion...' : 'Entrar'}
           </button>
