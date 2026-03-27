@@ -5,23 +5,23 @@ import { supabase, getEmpresaId } from '../../lib/supabase'
 
 const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
-const statusColors = {
+const statusColors: Record<string, string> = {
   verde: 'bg-green-500',
   naranja: 'bg-orange-500',
   rojo: 'bg-red-500',
 }
 
 export default function ControlVentas() {
-  const [ventas, setVentas] = useState([])
-  const [clientes, setClientes] = useState([])
+  const [ventas, setVentas] = useState<any[]>([])
+  const [clientes, setClientes] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [mostrarNueva, setMostrarNueva] = useState(false)
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
-  const [empresaId, setEmpresaId] = useState(null)
-  const [busquedaCliente, setBusquedaCliente] = useState({})
-  const [mostrarDropdown, setMostrarDropdown] = useState(null)
+  const [empresaId, setEmpresaId] = useState<string|null>(null)
+  const [busquedaCliente, setBusquedaCliente] = useState<Record<string, string>>({})
+  const [mostrarDropdown, setMostrarDropdown] = useState<string|null>(null)
   const [filtros, setFiltros] = useState({
     mes: 'todos', cliente: '', ruc_dni: '', ciudad: '', vendedor: '',
     monto: '', tipo_pago: '', status: ''
@@ -40,7 +40,7 @@ export default function ControlVentas() {
     cargarDatos(eid)
   }
 
-  const cargarDatos = async (eid) => {
+  const cargarDatos = async (eid: string|null) => {
     setCargando(true)
     const ventasQuery = supabase.from('ventas_especializadas').select('*').order('created_at', { ascending: false })
     if (eid) ventasQuery.eq('empresa_id', eid)
@@ -54,7 +54,7 @@ export default function ControlVentas() {
     setCargando(false)
   }
 
-  const clientesFiltrados = (texto) => clientes.filter(c =>
+  const clientesFiltrados = (texto: string) => clientes.filter(c =>
     (c.nombres + ' ' + c.apellidos).toLowerCase().includes(texto.toLowerCase()) ||
     (c.dni || '').includes(texto)
   ).slice(0, 5)
@@ -63,7 +63,6 @@ export default function ControlVentas() {
     return (
       (filtros.mes === 'todos' || v.mes === filtros.mes) &&
       (filtros.cliente === '' || (v.cliente || '').toLowerCase().includes(filtros.cliente.toLowerCase())) &&
-      (filtros.ruc_dni === '' || (v.ruc_dni || '').includes(filtros.ruc_dni)) &&
       (filtros.ciudad === '' || (v.ciudad || '').toLowerCase().includes(filtros.ciudad.toLowerCase())) &&
       (filtros.vendedor === '' || (v.vendedor || '').toLowerCase().includes(filtros.vendedor.toLowerCase())) &&
       (filtros.monto === '' || String(v.monto || '').includes(filtros.monto)) &&
@@ -76,12 +75,18 @@ export default function ControlVentas() {
   const totalMonto = filtradas.reduce((sum, v) => sum + (v.monto || 0), 0)
   const totalCantidad = filtradas.reduce((sum, v) => sum + (v.cantidad || 0), 0)
 
-  const editarCampo = async (id, campo, valor) => {
+  const editarCampo = async (id: string, campo: string, valor: any) => {
     setVentas(ventas.map(v => v.id === id ? { ...v, [campo]: valor } : v))
     await supabase.from('ventas_especializadas').update({ [campo]: valor }).eq('id', id)
   }
 
-  const seleccionarCliente = (ventaId, cliente) => {
+  const eliminarVenta = async (id: string) => {
+    if (!confirm('¿Eliminar esta venta?')) return
+    await supabase.from('ventas_especializadas').delete().eq('id', id)
+    setVentas(ventas.filter(v => v.id !== id))
+  }
+
+  const seleccionarCliente = (ventaId: string, cliente: any) => {
     const nombre = cliente.nombres + ' ' + cliente.apellidos
     setVentas(ventas.map(v => v.id === ventaId ? { ...v, cliente: nombre, ruc_dni: cliente.dni || '', ciudad: cliente.ciudad || '' } : v))
     supabase.from('ventas_especializadas').update({ cliente: nombre, ruc_dni: cliente.dni || '', ciudad: cliente.ciudad || '' }).eq('id', ventaId)
@@ -98,7 +103,7 @@ export default function ControlVentas() {
     setNueva({ mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde' })
   }
 
-  const escapeCSV = (val) => {
+  const escapeCSV = (val: any) => {
     const str = String(val === null || val === undefined ? '' : val)
     if (str.includes(';') || str.includes('"') || str.includes('\n')) return '"' + str.replace(/"/g, '""') + '"'
     return str
@@ -183,11 +188,12 @@ export default function ControlVentas() {
                   <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Cuotas</th>
                   <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Fechas pago</th>
                   <th className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">Status</th>
+                  <th className="px-3 py-3 border border-gray-700"></th>
                 </tr>
               </thead>
               <tbody>
                 {filtradas.length === 0 ? (
-                  <tr><td colSpan={15} className="px-4 py-12 text-center text-gray-400 text-sm">No hay ventas registradas</td></tr>
+                  <tr><td colSpan={16} className="px-4 py-12 text-center text-gray-400 text-sm">No hay ventas registradas</td></tr>
                 ) : filtradas.map((v) => (
                   <tr key={v.id} className="hover:bg-gray-800 border border-gray-700">
                     <td className="px-2 py-2 border border-gray-700">
@@ -199,7 +205,7 @@ export default function ControlVentas() {
                       <input value={busquedaCliente[v.id] !== undefined ? busquedaCliente[v.id] : (v.cliente || '')} onChange={(e) => { setBusquedaCliente({...busquedaCliente, [v.id]: e.target.value}); editarCampo(v.id, 'cliente', e.target.value); setMostrarDropdown(v.id) }} onFocus={() => setMostrarDropdown(v.id)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32" />
                       {mostrarDropdown === v.id && (busquedaCliente[v.id] || '').length > 0 && (
                         <div className="absolute top-full left-0 bg-gray-800 border border-gray-600 rounded-lg z-20 w-48 max-h-32 overflow-auto">
-                          {clientesFiltrados(busquedaCliente[v.id] || '').map(c => (
+                          {clientesFiltrados(busquedaCliente[v.id] || '').map((c: any) => (
                             <button key={c.id} onClick={() => seleccionarCliente(v.id, c)} className="w-full text-left px-3 py-2 hover:bg-gray-700 text-xs">
                               <p>{c.nombres} {c.apellidos}</p>
                               <p className="text-gray-400">{c.dni || '-'}</p>
@@ -234,6 +240,9 @@ export default function ControlVentas() {
                         <option value="rojo">Rojo</option>
                       </select>
                     </td>
+                    <td className="px-2 py-2 border border-gray-700">
+                      <button onClick={() => eliminarVenta(v.id)} className="text-red-400 hover:text-red-300 text-xs">🗑</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -242,7 +251,7 @@ export default function ControlVentas() {
                   <td colSpan={5} className="px-3 py-3 text-sm border border-gray-700">TOTAL</td>
                   <td className="px-3 py-3 text-sm text-green-400 border border-gray-700">S/ {totalMonto.toLocaleString()}</td>
                   <td className="px-3 py-3 text-sm text-blue-400 border border-gray-700">{totalCantidad}</td>
-                  <td colSpan={8} className="border border-gray-700"></td>
+                  <td colSpan={9} className="border border-gray-700"></td>
                 </tr>
               </tfoot>
             </table>
