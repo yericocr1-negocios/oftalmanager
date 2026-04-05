@@ -1,9 +1,15 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase, getEmpresaId } from '../../../lib/supabase'
+import { supabase, getEmpresaId, getSedeId } from '../../../lib/supabase'
 import Sidebar from '../../../components/Sidebar'
 
 const campoVacio = { esferico: '', cilindro: '', eje: '', av_cc: '', dip: '', altura: '' }
+
+const statusCuotaColors: Record<string, string> = {
+  verde: 'bg-green-600',
+  naranja: 'bg-orange-500',
+  rojo: 'bg-red-600',
+}
 
 export default function PerfilPaciente({ params }: { params: { id: string } }) {
   const [paciente, setPaciente] = useState<any>(null)
@@ -12,10 +18,15 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   const [guardando, setGuardando] = useState(false)
   const [compras, setCompras] = useState<any[]>([])
   const [citas, setCitas] = useState<any[]>([])
+  const [cuotasPaciente, setCuotasPaciente] = useState<any[]>([])
   const [doctores, setDoctores] = useState<any[]>([])
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [empresaId, setEmpresaId] = useState<string|null>(null)
+  const [sedeId, setSedeId] = useState<string|null>(null)
   const [historiaId, setHistoriaId] = useState<string|null>(null)
+  const [mostrarAgregarCompra, setMostrarAgregarCompra] = useState(false)
+  const [guardandoCompra, setGuardandoCompra] = useState(false)
+  const [nuevaCompra, setNuevaCompra] = useState({ concepto: '', monto: 0, metodo: 'efectivo' })
   const [doctor, setDoctor] = useState('')
   const [doctorTextoLibre, setDoctorTextoLibre] = useState(false)
   const [fecha, setFecha] = useState('')
@@ -56,12 +67,15 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   const iniciar = async (id: string | undefined) => {
     if (!id) return
     const eid = await getEmpresaId()
+    const sid = await getSedeId()
     setEmpresaId(eid)
+    setSedeId(sid)
     cargarPaciente(id)
     cargarCompras(id)
     cargarCitas(id)
     cargarHistoria(id)
     cargarDoctores(eid)
+    cargarCuotasPaciente(id, eid)
   }
 
   const cargarDoctores = async (eid: string|null) => {
@@ -115,6 +129,18 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     setCitas(data || [])
   }
 
+  const cargarCuotasPaciente = async (id: string, eid: string|null) => {
+    const query = supabase.from('cuotas_pago').select('*').order('created_at', { ascending: false })
+    if (eid) query.eq('empresa_id', eid)
+    const { data: pacienteData } = await supabase.from('pacientes').select('nombres, apellidos').eq('id', id).single()
+    if (pacienteData) {
+      const nombreCompleto = pacienteData.nombres + ' ' + pacienteData.apellidos
+      query.ilike('cliente_nombre', '%' + pacienteData.nombres + '%')
+    }
+    const { data } = await query
+    setCuotasPaciente(data || [])
+  }
+
   const guardarDatosPaciente = async () => {
     const id = window.location.pathname.split('/').pop()
     const { error } = await supabase.from('pacientes').update(datosPaciente).eq('id', id)
@@ -126,7 +152,6 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
   const guardarHistoria = async () => {
     const id = window.location.pathname.split('/').pop()
     setGuardando(true)
-
     const payload = {
       paciente_id: id, empresa_id: empresaId,
       doctor, fecha, tipo_prescripcion: tipoPrescripcion,
@@ -140,7 +165,6 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
       inter_od: interOD, inter_oi: interOI,
       updated_at: new Date().toISOString(),
     }
-
     let error: any
     if (historiaId) {
       const { error: e } = await supabase.from('historias_clinicas').update(payload).eq('id', historiaId)
@@ -150,15 +174,60 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
       if (data) setHistoriaId(data.id)
       error = e
     }
-
     setGuardando(false)
     if (error) { alert('Error: ' + error.message); return }
     alert('Historia clinica guardada correctamente')
   }
 
+  const guardarCompra = async () => {
+    if (!nuevaCompra.concepto) { alert('Ingresa el concepto'); return }
+    if (!nuevaCompra.monto) { alert('Ingresa el monto'); return }
+    setGuardandoCompra(true)
+    const id = window.location.pathname.split('/').pop()
+    const nombreCliente = paciente.nombres + ' ' + paciente.apellidos
+
+    const { data: ventaData, error } = await supabase.from('ventas').insert([{
+      empresa_id: empresaId, sede_id: sedeId,
+      paciente_id: id,
+      subtotal: nuevaCompra.monto, total: nuevaCompra.monto,
+      metodo_pago: nuevaCompra.metodo,
+      estado: 'pagado', notas: nuevaCompra.concepto,
+      cliente_nombre: nombreCliente,
+    }]).select().single()
+
+    if (error) { alert('Error: ' + error.message); setGuardandoCompra(false); return }
+
+    await supabase.from('ventas_detalle').insert([{
+      venta_id: ventaData.id, cantidad: 1,
+      precio_unitario: nuevaCompra.monto,
+      subtotal: nuevaCompra.monto,
+      nombre_producto: nuevaCompra.concepto,
+    }])
+
+    await supabase.from('caja').insert([{
+      sede_id: sedeId, tipo: 'ingreso',
+      concepto: nuevaCompra.concepto,
+      monto: nuevaCompra.monto,
+      metodo_pago: nuevaCompra.metodo,
+      cliente_nombre: nombreCliente,
+      fecha: new Date().toISOString(),
+    }])
+
+    setGuardandoCompra(false)
+    setMostrarAgregarCompra(false)
+    setNuevaCompra({ concepto: '', monto: 0, metodo: 'efectivo' })
+    cargarCompras(id!)
+    alert('Compra registrada correctamente')
+  }
+
   const cambiarEstadoVenta = async (ventaId: string, nuevoEstado: string) => {
     await supabase.from('ventas').update({ estado: nuevoEstado }).eq('id', ventaId)
     setCompras(compras.map(v => v.id === ventaId ? { ...v, estado: nuevoEstado } : v))
+  }
+
+  const editarCuotaInline = async (id: string, campo: string, valor: any) => {
+    setCuotasPaciente(cuotasPaciente.map(c => c.id === id ? { ...c, [campo]: valor } : c))
+    await supabase.from('cuotas_pago').update({ [campo]: valor }).eq('id', id)
   }
 
   const escapeCSV = (val: any) => {
@@ -174,18 +243,18 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
       headers = ['Campo', 'Valor']
       rows = Object.entries(datosPaciente).map(([k, v]) => [k, v])
       filename = 'datos-' + paciente.nombres + '.csv'
-    } else if (tab === 'historia') {
-      headers = ['Campo', 'Valor']
-      rows = [['Doctor', doctor], ['Fecha', fecha], ['Tipo prescripcion', tipoPrescripcion], ['Razon consulta', razonConsulta], ['Diagnostico', diagnostico], ['Tratamiento', tratamiento]]
-      filename = 'historia-' + paciente.nombres + '.csv'
     } else if (tab === 'compras') {
       headers = ['Fecha', 'Productos', 'Metodo', 'Total', 'Estado']
-      rows = compras.map(v => [new Date(v.created_at).toLocaleDateString('es-PE'), v.ventas_detalle?.map((d: any) => d.cantidad + 'x ' + (d.nombre_producto || 'Producto')).join(' | ') || '', v.metodo_pago || '', v.total || 0, v.estado || ''])
+      rows = compras.map(v => [new Date(v.created_at).toLocaleDateString('es-PE'), v.ventas_detalle?.map((d: any) => d.nombre_producto).join(', ') || '', v.metodo_pago || '', v.total || 0, v.estado || ''])
       filename = 'compras-' + paciente.nombres + '.csv'
-    } else {
+    } else if (tab === 'citas') {
       headers = ['Fecha', 'Hora', 'Doctor', 'Especialidad', 'Estado']
       rows = citas.map(c => [c.fecha || '', c.hora?.slice(0,5) || '', c.doctor || '', c.especialidad || '', c.estado || ''])
       filename = 'citas-' + paciente.nombres + '.csv'
+    } else {
+      headers = ['Cliente', 'Ciudad', 'Cuota', 'Monto', 'Estado', 'Monto pagado', 'Fecha pagado', 'Sucursal']
+      rows = cuotasPaciente.map(c => [c.cliente_nombre || '', c.ciudad || '', '#' + c.numero_cuota, c.monto || 0, c.color_estado || '', c.monto_pagado || 0, c.fecha_pagado || '', c.sucursal || ''])
+      filename = 'cuotas-' + paciente.nombres + '.csv'
     }
     const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -281,10 +350,10 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
             </div>
           </div>
 
-          <div className="flex gap-2 md:gap-3 mb-6 flex-wrap">
-            {['datos', 'historia', 'compras', 'citas'].map((t) => (
-              <button key={t} onClick={() => setTab(t)} className={'px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm transition-all ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
-                {t === 'datos' ? 'Datos' : t === 'historia' ? 'Historia' : t === 'compras' ? 'Compras' : 'Citas'}
+          <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
+            {['datos', 'historia', 'compras', 'citas', 'cuotas'].map((t) => (
+              <button key={t} onClick={() => setTab(t)} className={'px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm transition-all whitespace-nowrap ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
+                {t === 'datos' ? 'Datos' : t === 'historia' ? 'Historia' : t === 'compras' ? 'Compras' : t === 'citas' ? 'Citas' : 'Cuotas por cobrar'}
               </button>
             ))}
           </div>
@@ -402,7 +471,10 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
                 <h3 className="font-semibold">Historial de compras</h3>
-                <span className="text-sm text-gray-400">{compras.length} compras</span>
+                <div className="flex gap-2">
+                  <button onClick={() => setMostrarAgregarCompra(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs">+ Agregar compra</button>
+                  <span className="text-sm text-gray-400 self-center">{compras.length} compras</span>
+                </div>
               </div>
               {compras.length === 0 ? (
                 <div className="text-center text-gray-400 py-12">
@@ -431,7 +503,7 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                                 <p key={i} className="text-xs text-gray-200">{d.cantidad}x <span className="text-white font-medium">{d.nombre_producto || 'Producto'}</span></p>
                               ))}
                             </div>
-                          ) : <span className="text-gray-500 text-xs">-</span>}
+                          ) : <span className="text-gray-500 text-xs">{v.notas || '-'}</span>}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-300 capitalize hidden md:table-cell">{v.metodo_pago || '-'}</td>
                         <td className="px-6 py-4 text-sm font-bold text-green-400">S/ {v.total}</td>
@@ -489,8 +561,102 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
               )}
             </div>
           )}
+
+          {tab === 'cuotas' && (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-x-auto">
+              <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
+                <h3 className="font-semibold">Cuotas por cobrar</h3>
+                <span className="text-sm text-gray-400">{cuotasPaciente.length} cuotas</span>
+              </div>
+              {cuotasPaciente.length === 0 ? (
+                <div className="text-center text-gray-400 py-12">
+                  <p className="text-4xl mb-4">💰</p>
+                  <p className="text-sm">No hay cuotas registradas para este cliente</p>
+                  <a href="/finanzas" className="mt-3 inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Ir a Finanzas para agregar</a>
+                </div>
+              ) : (
+                <table className="w-full min-w-max">
+                  <thead>
+                    <tr className="border-b border-gray-800">
+                      <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Cliente</th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Ciudad</th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Cuota</th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Monto</th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Estado</th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Monto pagado</th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Fecha pagado</th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-400 uppercase">Sucursal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cuotasPaciente.map((c) => (
+                      <tr key={c.id} className="border-b border-gray-800 hover:bg-gray-800">
+                        <td className="px-4 py-3 text-sm font-medium whitespace-nowrap">{c.cliente_nombre}</td>
+                        <td className="px-4 py-3 text-sm text-gray-300">{c.ciudad || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-300">#{c.numero_cuota}</td>
+                        <td className="px-4 py-3 text-sm font-bold text-blue-400">S/ {c.monto}</td>
+                        <td className="px-4 py-3">
+                          <select value={c.color_estado || 'verde'} onChange={(e) => editarCuotaInline(c.id, 'color_estado', e.target.value)} className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + statusCuotaColors[c.color_estado || 'verde']}>
+                            <option value="verde">Verde</option>
+                            <option value="naranja">Naranja</option>
+                            <option value="rojo">Rojo</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-3">
+                          <input type="number" value={c.monto_pagado || 0} onChange={(e) => editarCuotaInline(c.id, 'monto_pagado', Number(e.target.value))} className="bg-transparent text-green-400 text-sm w-20 focus:outline-none border-b border-gray-700 focus:border-blue-500" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input type="date" value={c.fecha_pagado || ''} onChange={(e) => editarCuotaInline(c.id, 'fecha_pagado', e.target.value)} className="bg-transparent text-white text-xs focus:outline-none border-b border-gray-700 focus:border-blue-500" />
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-300">{c.sucursal || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      {mostrarAgregarCompra && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold">Agregar compra rapida</h3>
+              <button onClick={() => setMostrarAgregarCompra(false)} className="text-gray-400 hover:text-white text-xl">X</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Concepto / Producto</label>
+                <input type="text" value={nuevaCompra.concepto} onChange={(e) => setNuevaCompra({...nuevaCompra, concepto: e.target.value})} placeholder="ej: Consulta, Luna antireflex..." className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Monto S/</label>
+                  <input type="number" value={nuevaCompra.monto} onChange={(e) => setNuevaCompra({...nuevaCompra, monto: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Metodo de pago</label>
+                  <select value={nuevaCompra.metodo} onChange={(e) => setNuevaCompra({...nuevaCompra, metodo: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="efectivo">Efectivo</option>
+                    <option value="yape">Yape</option>
+                    <option value="plin">Plin</option>
+                    <option value="tarjeta">Tarjeta</option>
+                    <option value="transferencia">Transferencia</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setMostrarAgregarCompra(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
+              <button onClick={guardarCompra} disabled={guardandoCompra} className={'flex-1 text-white py-2 rounded-lg text-sm font-medium ' + (guardandoCompra ? 'bg-gray-600' : 'bg-blue-600 hover:bg-blue-700')}>
+                {guardandoCompra ? 'Guardando...' : 'Guardar compra'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
