@@ -123,7 +123,10 @@ export default function Agenda() {
               <p className="text-sm text-gray-400">{citasFiltradas.length} citas</p>
             </div>
           </div>
-          <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nueva cita</button>
+          <div className="flex gap-2">
+            <button onClick={() => { navigator.clipboard.writeText(window.location.origin + '/citas'); alert('Link copiado: ' + window.location.origin + '/citas') }} className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs">🔗 Link citas</button>
+            <button onClick={() => setMostrar(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Nueva cita</button>
+          </div>
         </div>
 
         <div className="p-4 md:p-8">
