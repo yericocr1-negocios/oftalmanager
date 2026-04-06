@@ -1,20 +1,33 @@
 'use client'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { getRol } from '../lib/supabase'
 
-const menu = [
-  { icon: '🏠', label: 'Dashboard', href: '/' },
-  { icon: '👤', label: 'Clientes (pacientes)', href: '/pacientes' },
-  { icon: '📅', label: 'Agenda', href: '/agenda' },
-  { icon: '💰', label: 'Ventas diarias', href: '/ventas' },
-  { icon: '📊', label: 'Control de ventas', href: '/control-ventas' },
-  { icon: '📦', label: 'Inventario', href: '/inventario' },
-  { icon: '💳', label: 'Finanzas', href: '/finanzas' },
-  { icon: '📈', label: 'Reportes', href: '/reportes' },
-  { icon: '⚙️', label: 'Config', href: '/configuracion' },
+const menuCompleto = [
+  { icon: '🏠', label: 'Dashboard', href: '/', roles: ['admin', 'doctor', 'vendedor', 'recepcion'] },
+  { icon: '👤', label: 'Clientes', href: '/pacientes', roles: ['admin', 'doctor', 'vendedor', 'recepcion'] },
+  { icon: '📅', label: 'Agenda', href: '/agenda', roles: ['admin', 'doctor', 'recepcion'] },
+  { icon: '💰', label: 'Ventas diarias', href: '/ventas', roles: ['admin', 'vendedor'] },
+  { icon: '📊', label: 'Control de ventas', href: '/control-ventas', roles: ['admin', 'vendedor'] },
+  { icon: '📦', label: 'Inventario', href: '/inventario', roles: ['admin', 'vendedor'] },
+  { icon: '💳', label: 'Finanzas', href: '/finanzas', roles: ['admin'] },
+  { icon: '📈', label: 'Reportes', href: '/reportes', roles: ['admin'] },
+  { icon: '⚙️', label: 'Config', href: '/configuracion', roles: ['admin'] },
 ]
 
 export default function Sidebar({ menuAbierto = false, setMenuAbierto = null }: { menuAbierto?: boolean, setMenuAbierto?: any }) {
   const pathname = usePathname()
+  const [rol, setRol] = useState<string | null>(null)
+  const [menu, setMenu] = useState(menuCompleto)
+
+  useEffect(() => {
+    getRol().then(r => {
+      setRol(r)
+      if (r) {
+        setMenu(menuCompleto.filter(item => item.roles.includes(r)))
+      }
+    })
+  }, [])
 
   const cerrar = () => {
     if (setMenuAbierto) setMenuAbierto(false)
@@ -44,6 +57,19 @@ export default function Sidebar({ menuAbierto = false, setMenuAbierto = null }: 
             )
           })}
         </nav>
+        {rol && (
+          <div className="p-4 border-t border-gray-800">
+            <div className="bg-gray-800 rounded-lg px-3 py-2 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-400">Tu rol</p>
+                <p className="text-sm font-medium capitalize text-blue-400">{rol}</p>
+              </div>
+              <span className="text-lg">
+                {rol === 'admin' ? '👑' : rol === 'doctor' ? '👨‍⚕️' : rol === 'vendedor' ? '💼' : '📋'}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </>
   )
