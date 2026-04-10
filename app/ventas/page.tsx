@@ -157,12 +157,27 @@ export default function VentasDiarias() {
       }])
     }
 
-    await supabase.from('caja').insert([{
+    // Registrar en caja
+    const { data: cajaData } = await supabase.from('caja').insert([{
       sede_id: sedeId, tipo: 'ingreso',
       concepto: 'Venta - ' + carrito.map((i: any) => i.nombre).join(', '),
       monto: total, metodo_pago: metodoPago,
       venta_id: ventaData.id, cliente_nombre: nombreCliente,
       fecha: new Date().toISOString(),
+    }]).select().single()
+
+    // Registrar en contabilidad ventas automáticamente
+    await supabase.from('contabilidad_ventas').insert([{
+      empresa_id: empresaId,
+      fecha: new Date().toISOString().split('T')[0],
+      cliente: nombreCliente,
+      guia_factura: '',
+      monto_venta: total,
+      impuesto: Math.round(total * 0.18 * 100) / 100,
+      comentarios: 'Venta diaria - ' + carrito.map((i: any) => i.nombre).join(', '),
+      origen: 'venta_diaria',
+      venta_id: ventaData.id,
+      caja_id: cajaData?.id || null
     }])
 
     if (cuotas && numeroCuotas > 1) {
@@ -207,11 +222,25 @@ export default function VentasDiarias() {
       fechas_pago: ventaEsp.fechas_pago, status: ventaEsp.status,
     }])
 
-    await supabase.from('caja').insert([{
+    // Registrar en caja
+    const { data: cajaEspData } = await supabase.from('caja').insert([{
       sede_id: sedeId, tipo: 'ingreso',
       concepto: 'Venta especializada - ' + nombreCliente,
       monto: ventaEsp.monto, metodo_pago: 'efectivo',
       cliente_nombre: nombreCliente, fecha: new Date().toISOString(),
+    }]).select().single()
+
+    // Registrar en contabilidad ventas automáticamente
+    await supabase.from('contabilidad_ventas').insert([{
+      empresa_id: empresaId,
+      fecha: ventaEsp.fecha_venta || new Date().toISOString().split('T')[0],
+      cliente: nombreCliente,
+      guia_factura: ventaEsp.guia_factura || '',
+      monto_venta: ventaEsp.monto,
+      impuesto: Math.round(ventaEsp.monto * 0.18 * 100) / 100,
+      comentarios: 'Venta especializada',
+      origen: 'venta_especializada',
+      caja_id: cajaEspData?.id || null
     }])
 
     setGuardandoEsp(false)
@@ -281,9 +310,7 @@ export default function VentasDiarias() {
                             <button onClick={() => eliminarProducto(producto.id)} className="text-gray-600 hover:text-red-400 text-xs ml-1 flex-shrink-0">✕</button>
                           </div>
                           <p className="text-blue-400 font-bold text-sm mb-2">S/ {producto.precio}</p>
-                          <button onClick={() => agregarAlCarrito(producto)} className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-1 rounded-lg">
-                            + Agregar
-                          </button>
+                          <button onClick={() => agregarAlCarrito(producto)} className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-1 rounded-lg">+ Agregar</button>
                         </div>
                       ))}
                     </div>

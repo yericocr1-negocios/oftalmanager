@@ -129,14 +129,46 @@ export default function Finanzas() {
       ? clienteMovSeleccionado.nombres + ' ' + clienteMovSeleccionado.apellidos
       : nuevoMov.cliente
 
-    const { error } = await supabase.from('caja').insert([{
+    const { data: cajaNueva, error } = await supabase.from('caja').insert([{
       sede_id: sedeId, tipo: nuevoMov.tipo,
       concepto: nuevoMov.concepto,
       monto: nuevoMov.monto, metodo_pago: nuevoMov.metodo,
       cliente_nombre: nombreCliente,
       fecha: nuevoMov.fecha ? new Date(nuevoMov.fecha).toISOString() : new Date().toISOString(),
-    }])
+    }]).select().single()
+
     if (error) { alert('Error: ' + error.message); return }
+
+    // Si es egreso → registrar en contabilidad compras
+    if (nuevoMov.tipo === 'egreso') {
+      await supabase.from('contabilidad_compras').insert([{
+        empresa_id: empresaId,
+        empresa_proveedor: nombreCliente || 'Sin proveedor',
+        fecha: nuevoMov.fecha || new Date().toISOString().split('T')[0],
+        producto_servicio: nuevoMov.concepto || '',
+        comentario: 'Egreso de caja',
+        guia_factura: '',
+        monto: nuevoMov.monto,
+        impuesto: Math.round(nuevoMov.monto * 0.18 * 100) / 100,
+        caja_id: cajaNueva?.id || null
+      }])
+    }
+
+    // Si es ingreso → registrar en contabilidad ventas
+    if (nuevoMov.tipo === 'ingreso') {
+      await supabase.from('contabilidad_ventas').insert([{
+        empresa_id: empresaId,
+        fecha: nuevoMov.fecha || new Date().toISOString().split('T')[0],
+        cliente: nombreCliente || '',
+        guia_factura: '',
+        monto_venta: nuevoMov.monto,
+        impuesto: Math.round(nuevoMov.monto * 0.18 * 100) / 100,
+        comentarios: nuevoMov.concepto || '',
+        origen: 'caja',
+        caja_id: cajaNueva?.id || null
+      }])
+    }
+
     setMostrarMov(false)
     setNuevoMov({ cliente: '', concepto: '', metodo: 'efectivo', tipo: 'ingreso', monto: 0, fecha: new Date().toISOString().split('T')[0] })
     setClienteMovSeleccionado(null)
