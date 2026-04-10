@@ -11,14 +11,22 @@ const statusCuotaColors: Record<string, string> = {
   rojo: 'bg-red-600',
 }
 
+const statusColors: Record<string, string> = {
+  verde: 'bg-green-500',
+  naranja: 'bg-orange-500',
+  rojo: 'bg-red-500',
+}
+
 export default function PerfilPaciente({ params }: { params: { id: string } }) {
   const [paciente, setPaciente] = useState<any>(null)
   const [tab, setTab] = useState('datos')
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
-  const [compras, setCompras] = useState<any[]>([])
+  const [ventasDiarias, setVentasDiarias] = useState<any[]>([])
+  const [ventasEsp, setVentasEsp] = useState<any[]>([])
   const [citas, setCitas] = useState<any[]>([])
   const [cuotasPaciente, setCuotasPaciente] = useState<any[]>([])
+  const [enviosPaciente, setEnviosPaciente] = useState<any[]>([])
   const [doctores, setDoctores] = useState<any[]>([])
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [empresaId, setEmpresaId] = useState<string|null>(null)
@@ -71,11 +79,13 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     setEmpresaId(eid)
     setSedeId(sid)
     cargarPaciente(id)
-    cargarCompras(id)
+    cargarVentasDiarias(id)
+    cargarVentasEsp(id, eid)
     cargarCitas(id)
     cargarHistoria(id)
     cargarDoctores(eid)
     cargarCuotasPaciente(id, eid)
+    cargarEnvios(id)
   }
 
   const cargarDoctores = async (eid: string|null) => {
@@ -119,9 +129,15 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     }
   }
 
-  const cargarCompras = async (id: string) => {
+  const cargarVentasDiarias = async (id: string) => {
     const { data } = await supabase.from('ventas').select('*, ventas_detalle(*)').eq('paciente_id', id).order('created_at', { ascending: false })
-    setCompras(data || [])
+    setVentasDiarias(data || [])
+  }
+
+  const cargarVentasEsp = async (id: string, eid: string|null) => {
+    const query = supabase.from('ventas_especializadas').select('*').eq('paciente_id', id).order('created_at', { ascending: false })
+    const { data } = await query
+    setVentasEsp(data || [])
   }
 
   const cargarCitas = async (id: string) => {
@@ -134,11 +150,15 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     if (eid) query.eq('empresa_id', eid)
     const { data: pacienteData } = await supabase.from('pacientes').select('nombres, apellidos').eq('id', id).single()
     if (pacienteData) {
-      const nombreCompleto = pacienteData.nombres + ' ' + pacienteData.apellidos
       query.ilike('cliente_nombre', '%' + pacienteData.nombres + '%')
     }
     const { data } = await query
     setCuotasPaciente(data || [])
+  }
+
+  const cargarEnvios = async (id: string) => {
+    const { data } = await supabase.from('envios').select('*').eq('paciente_id', id).order('fecha', { ascending: false })
+    setEnviosPaciente(data || [])
   }
 
   const guardarDatosPaciente = async () => {
@@ -216,13 +236,8 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     setGuardandoCompra(false)
     setMostrarAgregarCompra(false)
     setNuevaCompra({ concepto: '', monto: 0, metodo: 'efectivo' })
-    cargarCompras(id!)
+    cargarVentasDiarias(id!)
     alert('Compra registrada correctamente')
-  }
-
-  const cambiarEstadoVenta = async (ventaId: string, nuevoEstado: string) => {
-    await supabase.from('ventas').update({ estado: nuevoEstado }).eq('id', ventaId)
-    setCompras(compras.map(v => v.id === ventaId ? { ...v, estado: nuevoEstado } : v))
   }
 
   const editarCuotaInline = async (id: string, campo: string, valor: any) => {
@@ -230,40 +245,11 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     await supabase.from('cuotas_pago').update({ [campo]: valor }).eq('id', id)
   }
 
-  const escapeCSV = (val: any) => {
-    const str = String(val === null || val === undefined ? '' : val)
-    if (str.includes(';') || str.includes('"') || str.includes('\n')) return '"' + str.replace(/"/g, '""') + '"'
-    return str
-  }
+  const getPrecioUnitario = (v: any) => v.cantidad > 0 ? v.monto / v.cantidad : 0
+  const getMargen = (v: any) => (getPrecioUnitario(v) - (v.precio_costo || 0)) * (v.cantidad || 1)
 
-  const descargar = () => {
-    if (!paciente) return
-    let headers: string[], rows: any[][], filename: string
-    if (tab === 'datos') {
-      headers = ['Campo', 'Valor']
-      rows = Object.entries(datosPaciente).map(([k, v]) => [k, v])
-      filename = 'datos-' + paciente.nombres + '.csv'
-    } else if (tab === 'compras') {
-      headers = ['Fecha', 'Productos', 'Metodo', 'Total', 'Estado']
-      rows = compras.map(v => [new Date(v.created_at).toLocaleDateString('es-PE'), v.ventas_detalle?.map((d: any) => d.nombre_producto).join(', ') || '', v.metodo_pago || '', v.total || 0, v.estado || ''])
-      filename = 'compras-' + paciente.nombres + '.csv'
-    } else if (tab === 'citas') {
-      headers = ['Fecha', 'Hora', 'Doctor', 'Especialidad', 'Estado']
-      rows = citas.map(c => [c.fecha || '', c.hora?.slice(0,5) || '', c.doctor || '', c.especialidad || '', c.estado || ''])
-      filename = 'citas-' + paciente.nombres + '.csv'
-    } else {
-      headers = ['Cliente', 'Ciudad', 'Cuota', 'Monto', 'Estado', 'Monto pagado', 'Fecha pagado', 'Sucursal']
-      rows = cuotasPaciente.map(c => [c.cliente_nombre || '', c.ciudad || '', '#' + c.numero_cuota, c.monto || 0, c.color_estado || '', c.monto_pagado || 0, c.fecha_pagado || '', c.sucursal || ''])
-      filename = 'cuotas-' + paciente.nombres + '.csv'
-    }
-    const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
-  }
+  const thClass = 'text-left px-3 py-3 text-xs text-gray-400 uppercase whitespace-nowrap border-b border-gray-700'
+  const tdClass = 'px-3 py-3 text-sm text-gray-200 whitespace-nowrap'
 
   const InputCampo = ({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) => (
     <input type="text" placeholder={label} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 text-center" />
@@ -322,6 +308,8 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
     </div>
   )
 
+  const totalCompras = ventasDiarias.reduce((s, v) => s + (v.total || 0), 0) + ventasEsp.reduce((s, v) => s + (v.monto || 0), 0)
+
   return (
     <div className="flex h-screen bg-gray-950 text-white">
       <Sidebar menuAbierto={menuAbierto} setMenuAbierto={setMenuAbierto} />
@@ -333,7 +321,6 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
             <span className="text-gray-600">/</span>
             <h2 className="text-sm md:text-lg font-semibold truncate">{paciente.nombres} {paciente.apellidos}</h2>
           </div>
-          <button onClick={descargar} className="bg-gray-700 hover:bg-gray-600 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm">⬇ Descargar</button>
         </div>
 
         <div className="p-4 md:p-8">
@@ -346,14 +333,15 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
               <div className="flex flex-wrap gap-3 mt-2">
                 <p className="text-xs md:text-sm text-gray-400">DNI: <span className="text-white">{paciente.dni || '-'}</span></p>
                 <p className="text-xs md:text-sm text-gray-400">Tel: <span className="text-white">{paciente.telefono || '-'}</span></p>
+                <p className="text-xs md:text-sm text-gray-400">Total compras: <span className="text-green-400 font-bold">S/ {totalCompras.toFixed(2)}</span></p>
               </div>
             </div>
           </div>
 
           <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-            {['datos', 'historia', 'compras', 'citas', 'cuotas'].map((t) => (
+            {['datos', 'historia', 'compras', 'citas', 'cuotas', 'envios'].map((t) => (
               <button key={t} onClick={() => setTab(t)} className={'px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm transition-all whitespace-nowrap ' + (tab === t ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-800')}>
-                {t === 'datos' ? 'Datos' : t === 'historia' ? 'Historia' : t === 'compras' ? 'Compras' : t === 'citas' ? 'Citas' : 'Cuotas por cobrar'}
+                {t === 'datos' ? 'Datos' : t === 'historia' ? 'Historia' : t === 'compras' ? 'Compras' : t === 'citas' ? 'Citas' : t === 'cuotas' ? 'Cuotas por cobrar' : '📬 Envíos'}
               </button>
             ))}
           </div>
@@ -468,57 +456,121 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
           )}
 
           {tab === 'compras' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
-                <h3 className="font-semibold">Historial de compras</h3>
-                <div className="flex gap-2">
-                  <button onClick={() => setMostrarAgregarCompra(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs">+ Agregar compra</button>
-                  <span className="text-sm text-gray-400 self-center">{compras.length} compras</span>
+            <div className="space-y-6">
+              {/* Ventas especializadas */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
+                  <h3 className="font-semibold">Ventas especializadas</h3>
+                  <span className="text-sm text-gray-400">{ventasEsp.length} registros</span>
                 </div>
+                {ventasEsp.length === 0 ? (
+                  <div className="text-center text-gray-400 py-8">
+                    <p className="text-sm">No hay ventas especializadas registradas</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-max">
+                      <thead className="bg-gray-800">
+                        <tr>
+                          <th className={thClass}>Mes</th>
+                          <th className={thClass}>RUC/DNI</th>
+                          <th className={thClass}>Ciudad</th>
+                          <th className={thClass}>Vendedor</th>
+                          <th className={thClass}>Monto</th>
+                          <th className={thClass}>Cantidad</th>
+                          <th className={thClass + ' text-blue-400'}>Precio Unit.</th>
+                          <th className={thClass + ' text-orange-400'}>Costo</th>
+                          <th className={thClass + ' text-green-400'}>Margen</th>
+                          <th className={thClass}>Facturado por</th>
+                          <th className={thClass}>Fecha</th>
+                          <th className={thClass}>Guía/Factura</th>
+                          <th className={thClass}>Comentarios</th>
+                          <th className={thClass}>Tipo pago</th>
+                          <th className={thClass}>Cuotas</th>
+                          <th className={thClass}>Fechas pago</th>
+                          <th className={thClass}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ventasEsp.map((v) => (
+                          <tr key={v.id} className="border-t border-gray-800 hover:bg-gray-800">
+                            <td className={tdClass}>{v.mes || '-'}</td>
+                            <td className={tdClass}>{v.ruc_dni || '-'}</td>
+                            <td className={tdClass}>{v.ciudad || '-'}</td>
+                            <td className={tdClass}>{v.vendedor || '-'}</td>
+                            <td className={tdClass + ' text-green-400 font-bold'}>S/ {Number(v.monto||0).toFixed(2)}</td>
+                            <td className={tdClass + ' text-center'}>{v.cantidad || 1}</td>
+                            <td className={tdClass + ' text-blue-400 font-bold'}>S/ {getPrecioUnitario(v).toFixed(2)}</td>
+                            <td className={tdClass + ' text-orange-400'}>S/ {Number(v.precio_costo||0).toFixed(2)}</td>
+                            <td className={tdClass + ' font-bold'}>
+                              <span className={getMargen(v) >= 0 ? 'text-green-400' : 'text-red-400'}>S/ {getMargen(v).toFixed(2)}</span>
+                            </td>
+                            <td className={tdClass}>{v.facturado_por || '-'}</td>
+                            <td className={tdClass}>{v.fecha_venta || '-'}</td>
+                            <td className={tdClass}>{v.guia_factura || '-'}</td>
+                            <td className={tdClass}>{v.comentarios || '-'}</td>
+                            <td className={tdClass + ' capitalize'}>{v.tipo_pago || '-'}</td>
+                            <td className={tdClass}>{v.num_cuotas || '-'}</td>
+                            <td className={tdClass}>{v.fechas_pago || '-'}</td>
+                            <td className={tdClass}>
+                              <span className={'text-xs px-2 py-1 rounded-full text-white ' + (statusColors[v.status] || 'bg-gray-600')}>{v.status || '-'}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-              {compras.length === 0 ? (
-                <div className="text-center text-gray-400 py-12">
-                  <p className="text-4xl mb-4">🛒</p>
-                  <p>No hay compras registradas</p>
+
+              {/* Ventas diarias */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
+                  <h3 className="font-semibold">Ventas diarias</h3>
+                  <div className="flex gap-2 items-center">
+                    <button onClick={() => setMostrarAgregarCompra(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs">+ Agregar</button>
+                    <span className="text-sm text-gray-400">{ventasDiarias.length} registros</span>
+                  </div>
                 </div>
-              ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Fecha</th>
-                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Productos</th>
-                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase hidden md:table-cell">Metodo</th>
-                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Total</th>
-                      <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {compras.map((v) => (
-                      <tr key={v.id} className="border-b border-gray-800 hover:bg-gray-800">
-                        <td className="px-6 py-4 text-sm text-gray-300">{new Date(v.created_at).toLocaleDateString('es-PE')}</td>
-                        <td className="px-6 py-4">
-                          {v.ventas_detalle && v.ventas_detalle.length > 0 ? (
-                            <div className="space-y-1">
-                              {v.ventas_detalle.map((d: any, i: number) => (
-                                <p key={i} className="text-xs text-gray-200">{d.cantidad}x <span className="text-white font-medium">{d.nombre_producto || 'Producto'}</span></p>
-                              ))}
-                            </div>
-                          ) : <span className="text-gray-500 text-xs">{v.notas || '-'}</span>}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-300 capitalize hidden md:table-cell">{v.metodo_pago || '-'}</td>
-                        <td className="px-6 py-4 text-sm font-bold text-green-400">S/ {v.total}</td>
-                        <td className="px-6 py-4">
-                          <select value={v.estado} onChange={(e) => cambiarEstadoVenta(v.id, e.target.value)} className={'text-xs px-2 py-1 rounded-full border-0 cursor-pointer text-white ' + (v.estado === 'pagado' ? 'bg-green-600' : v.estado === 'anulado' ? 'bg-red-600' : 'bg-orange-500')}>
-                            <option value="pagado">Pagado</option>
-                            <option value="pendiente">Pendiente</option>
-                            <option value="anulado">No pago</option>
-                          </select>
-                        </td>
+                {ventasDiarias.length === 0 ? (
+                  <div className="text-center text-gray-400 py-8">
+                    <p className="text-sm">No hay ventas diarias registradas</p>
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Fecha</th>
+                        <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Productos</th>
+                        <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Metodo</th>
+                        <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Total</th>
+                        <th className="text-left px-6 py-3 text-xs text-gray-400 uppercase">Estado</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                    </thead>
+                    <tbody>
+                      {ventasDiarias.map((v) => (
+                        <tr key={v.id} className="border-b border-gray-800 hover:bg-gray-800">
+                          <td className="px-6 py-4 text-sm text-gray-300">{new Date(v.created_at).toLocaleDateString('es-PE')}</td>
+                          <td className="px-6 py-4">
+                            {v.ventas_detalle && v.ventas_detalle.length > 0 ? (
+                              <div className="space-y-1">
+                                {v.ventas_detalle.map((d: any, i: number) => (
+                                  <p key={i} className="text-xs text-gray-200">{d.cantidad}x <span className="text-white font-medium">{d.nombre_producto || 'Producto'}</span></p>
+                                ))}
+                              </div>
+                            ) : <span className="text-gray-500 text-xs">{v.notas || '-'}</span>}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-300 capitalize">{v.metodo_pago || '-'}</td>
+                          <td className="px-6 py-4 text-sm font-bold text-green-400">S/ {v.total}</td>
+                          <td className="px-6 py-4">
+                            <span className={'text-xs px-2 py-1 rounded-full text-white ' + (v.estado === 'pagado' ? 'bg-green-600' : v.estado === 'anulado' ? 'bg-red-600' : 'bg-orange-500')}>{v.estado}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           )}
 
@@ -613,6 +665,66 @@ export default function PerfilPaciente({ params }: { params: { id: string } }) {
                     ))}
                   </tbody>
                 </table>
+              )}
+            </div>
+          )}
+
+          {tab === 'envios' && (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
+                <h3 className="font-semibold">Historial de envíos</h3>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-400">{enviosPaciente.length} envíos</span>
+                  <a href="/envios" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs">+ Nuevo envío</a>
+                </div>
+              </div>
+              {enviosPaciente.length === 0 ? (
+                <div className="text-center text-gray-400 py-12">
+                  <p className="text-4xl mb-4">📬</p>
+                  <p className="text-sm mb-3">No hay envíos registrados para este cliente</p>
+                  <a href="/envios" className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Ir a Envíos para registrar</a>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-max">
+                    <thead className="bg-gray-800">
+                      <tr>
+                        <th className={thClass}>Fecha</th>
+                        <th className={thClass}>Ciudad</th>
+                        <th className={thClass}>Código envío</th>
+                        <th className={thClass}>N° envío</th>
+                        <th className={thClass}>Empresa envío</th>
+                        <th className={thClass}>Paquetes</th>
+                        <th className={thClass}>Monto</th>
+                        <th className={thClass}>Tema</th>
+                        <th className={thClass}>Comentario</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {enviosPaciente.map((e) => (
+                        <tr key={e.id} className="border-t border-gray-800 hover:bg-gray-800">
+                          <td className={tdClass}>{e.fecha}</td>
+                          <td className={tdClass}>{e.ciudad || '-'}</td>
+                          <td className={tdClass}>{e.codigo_envio || '-'}</td>
+                          <td className={tdClass}>{e.numero_envio || '-'}</td>
+                          <td className={tdClass}>{e.empresa_envio || '-'}</td>
+                          <td className={tdClass + ' text-blue-400 font-bold text-center'}>{e.cantidad_paquetes}</td>
+                          <td className={tdClass + ' text-green-400 font-bold'}>S/ {Number(e.monto||0).toFixed(2)}</td>
+                          <td className={tdClass}>{e.tema || '-'}</td>
+                          <td className={tdClass}>{e.comentario || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-800 border-t border-gray-700">
+                        <td colSpan={5} className="px-3 py-3 text-xs text-gray-400 font-bold uppercase">Totales</td>
+                        <td className="px-3 py-3 text-sm font-bold text-blue-400">{enviosPaciente.reduce((s,e) => s+(e.cantidad_paquetes||0),0)}</td>
+                        <td className="px-3 py-3 text-sm font-bold text-green-400">S/ {enviosPaciente.reduce((s,e) => s+(e.monto||0),0).toFixed(2)}</td>
+                        <td colSpan={2}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               )}
             </div>
           )}
