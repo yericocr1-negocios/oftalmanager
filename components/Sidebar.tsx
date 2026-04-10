@@ -24,37 +24,31 @@ export default function Sidebar({ menuAbierto = false, setMenuAbierto = null }: 
   const [menu, setMenu] = useState(menuCompleto)
   const [nombreEmpresa, setNombreEmpresa] = useState('')
 
-  useEffect(() => {
-    cargarMenu()
-  }, [])
+  useEffect(() => { cargarMenu() }, [])
 
   const cargarMenu = async () => {
     const r = await getRol()
     setRol(r)
-
     const eid = await getEmpresaId()
-
-    // Cargar nombre de empresa
     if (eid) {
       const { data: emp } = await supabase.from('empresas').select('nombre, permisos').eq('id', eid).single()
       if (emp?.nombre) setNombreEmpresa(emp.nombre)
-
-      // Si hay permisos personalizados en Supabase, usarlos
       if (emp?.permisos && r && r !== 'admin' && emp.permisos[r]) {
         const permisosRol: string[] = emp.permisos[r]
         setMenu(menuCompleto.filter(item => permisosRol.includes(item.key)))
         return
       }
     }
-
-    // Si no hay permisos personalizados, usar los defaults por rol
-    if (r) {
-      setMenu(menuCompleto.filter(item => item.roles.includes(r)))
-    }
+    if (r) setMenu(menuCompleto.filter(item => item.roles.includes(r)))
   }
 
-  const cerrar = () => {
-    if (setMenuAbierto) setMenuAbierto(false)
+  const cerrar = () => { if (setMenuAbierto) setMenuAbierto(false) }
+
+  const cerrarSesion = async () => {
+    const mod = await import('../lib/supabase')
+    mod.clearCache()
+    await mod.supabase.auth.signOut()
+    window.location.href = '/login'
   }
 
   return (
@@ -63,6 +57,7 @@ export default function Sidebar({ menuAbierto = false, setMenuAbierto = null }: 
         <div className="fixed inset-0 bg-black bg-opacity-60 z-30 md:hidden" onClick={cerrar} />
       )}
       <div className={'fixed md:relative z-40 md:z-auto h-full w-64 bg-gray-900 border-r border-gray-800 flex flex-col transition-transform duration-300 ' + (menuAbierto ? 'translate-x-0' : '-translate-x-full md:translate-x-0')}>
+
         <div className="p-5 border-b border-gray-800 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <span className="text-3xl">👁️</span>
@@ -78,13 +73,7 @@ export default function Sidebar({ menuAbierto = false, setMenuAbierto = null }: 
           {menu.map((item) => {
             const activo = pathname === item.href
             return (
-              
-                href={item.href}
-                key={item.label}
-                onClick={cerrar}
-                className={'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ' +
-                  (activo ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white')}
-              >
+              <a href={item.href} key={item.label} onClick={cerrar} className={'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ' + (activo ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white')}>
                 <span className="text-base">{item.icon}</span>
                 <span>{item.label}</span>
               </a>
@@ -103,20 +92,12 @@ export default function Sidebar({ menuAbierto = false, setMenuAbierto = null }: 
                 {rol === 'admin' ? '👑' : rol === 'doctor' ? '👨‍⚕️' : rol === 'vendedor' ? '💼' : '📋'}
               </span>
             </div>
-            <button
-              onClick={async () => {
-                const { clearCache } = await import('../lib/supabase')
-                clearCache()
-                const { supabase: sb } = await import('../lib/supabase')
-                await sb.auth.signOut()
-                window.location.href = '/login'
-              }}
-              className="w-full mt-2 text-xs text-gray-500 hover:text-red-400 py-1 transition-all text-center"
-            >
+            <button onClick={cerrarSesion} className="w-full mt-2 text-xs text-gray-500 hover:text-red-400 py-1 transition-all text-center">
               Cerrar sesión
             </button>
           </div>
         )}
+
       </div>
     </>
   )
