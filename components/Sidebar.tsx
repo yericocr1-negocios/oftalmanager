@@ -13,6 +13,8 @@ const menuCompleto = [
   { icon: '💳', label: 'Finanzas', href: '/finanzas', roles: ['admin'] },
   { icon: '📈', label: 'Reportes', href: '/reportes', roles: ['admin'] },
   { icon: '⚙️', label: 'Config', href: '/configuracion', roles: ['admin'] },
+  { icon: '🧾', label: 'Contabilidad', href: '/contabilidad', roles: ['admin'] },
+  { icon: '📬', label: 'Envíos', href: '/envios', roles: ['admin'] },
 ]
 
 export default function Sidebar({ menuAbierto = false, setMenuAbierto = null }: { menuAbierto?: boolean, setMenuAbierto?: any }) {
