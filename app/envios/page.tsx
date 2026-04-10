@@ -17,7 +17,7 @@ export default function Envios() {
   const [filtros, setFiltros] = useState({ cliente: '', ciudad: '', fecha: '', codigo: '', numero: '', tema: '', empresa_envio: '', monto: '' })
   const [nuevo, setNuevo] = useState({
     ciudad: '', fecha: '', codigo_envio: '', numero_envio: '', tema: '',
-    empresa_envio: '', cantidad_paquetes: 1, monto: '', comentario: ''
+    empresa_envio: '', cantidad_paquetes: '1', monto: '', comentario: ''
   })
 
   useEffect(() => { iniciar() }, [])
