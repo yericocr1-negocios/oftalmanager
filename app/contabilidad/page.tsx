@@ -66,8 +66,10 @@ export default function Contabilidad() {
 
   const guardarCompra = async () => {
     if (!nuevaCompra.fecha || !nuevaCompra.monto) { alert('Fecha y monto son obligatorios'); return }
+    const montoCompra = parseFloat(nuevaCompra.monto) || 0
+    const impuestoCompra = Math.round(montoCompra * 0.18 * 100) / 100
     const { error } = await supabase.from('contabilidad_compras').insert([{
-      empresa_id: empresaId, ...nuevaCompra, monto: parseFloat(nuevaCompra.monto) || 0
+      empresa_id: empresaId, ...nuevaCompra, monto: montoCompra, impuesto: impuestoCompra
     }])
     if (error) { alert('Error: ' + error.message); return }
     setMostrarCompra(false)
@@ -224,6 +226,7 @@ export default function Contabilidad() {
                       <th className={thClass}>Comentario</th>
                       <th className={thClass}>Guía / Factura</th>
                       <th className={thClass}>Monto</th>
+                      <th className={thClass}>Impuesto 18%</th>
                       <th className={thClass}>Eliminar</th>
                     </tr>
                   </thead>
@@ -239,17 +242,19 @@ export default function Contabilidad() {
                         <td className={tdClass}>{c.producto_servicio || '-'}</td>
                         <td className={tdClass}>{c.comentario || '-'}</td>
                         <td className={tdClass}>{c.guia_factura || '-'}</td>
-                        <td className={tdClass + ' text-red-400 font-bold'}>S/ {Number(c.monto || 0).toFixed(2)}</td>
-                        <td className={tdClass}>
-                          <button onClick={() => eliminarCompra(c.id)} className="text-red-400 hover:text-red-300 text-lg">🗑</button>
-                        </td>
+                      <td className={tdClass + ' text-red-400 font-bold'}>S/ {Number(c.monto || 0).toFixed(2)}</td>
+                      <td className={tdClass + ' text-yellow-400'}>S/ {Number(c.impuesto || (c.monto * 0.18) || 0).toFixed(2)}</td>
+                      <td className={tdClass}>
+                        <button onClick={() => eliminarCompra(c.id)} className="text-red-400 hover:text-red-300 text-lg">🗑</button>
+                      </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-800 border-t border-gray-700">
-                      <td colSpan={5} className="px-3 py-3 text-xs text-gray-400 font-bold uppercase">Total compras</td>
+                      <td colSpan={5} className="px-3 py-3 text-xs text-gray-400 font-bold uppercase">Totales</td>
                       <td className="px-3 py-3 text-sm font-bold text-red-400">S/ {totalCompras.toFixed(2)}</td>
+                      <td className="px-3 py-3 text-sm font-bold text-yellow-400">S/ {comprasFiltradas.reduce((s,c) => s + (c.impuesto || c.monto * 0.18 || 0), 0).toFixed(2)}</td>
                       <td></td>
                     </tr>
                   </tfoot>

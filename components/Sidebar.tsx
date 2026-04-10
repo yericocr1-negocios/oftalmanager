@@ -42,9 +42,12 @@ export default function Sidebar({ menuAbierto = false, setMenuAbierto = null }: 
       )}
       <div className={'fixed md:relative z-40 md:z-auto h-full w-64 bg-gray-900 border-r border-gray-800 flex flex-col transition-transform duration-300 ' + (menuAbierto ? 'translate-x-0' : '-translate-x-full md:translate-x-0')}>
         <div className="p-6 border-b border-gray-800 flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-bold text-blue-400">OFTALMANAGER</h1>
-            <p className="text-xs text-gray-400 mt-1">Sistema de gestion clinica</p>
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">👁️</span>
+            <div>
+              <h1 className="text-xl font-bold text-blue-400">OFTALMANAGER</h1>
+              <p className="text-xs text-gray-400 mt-1">Sistema de gestion clinica</p>
+            </div>
           </div>
           <button onClick={cerrar} className="md:hidden text-gray-400 hover:text-white text-lg">✕</button>
         </div>

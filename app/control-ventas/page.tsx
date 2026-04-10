@@ -29,7 +29,8 @@ export default function ControlVentas() {
   const [nueva, setNueva] = useState({
     mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0,
     cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '',
-    tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde'
+    tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde',
+    precio_costo: 0
   })
 
   useEffect(() => { iniciar() }, [])
@@ -79,6 +80,9 @@ export default function ControlVentas() {
   const totalMonto = filtradas.reduce((sum, v) => sum + (v.monto || 0), 0)
   const totalCantidad = filtradas.reduce((sum, v) => sum + (v.cantidad || 0), 0)
 
+  const getPrecioUnitario = (v: any) => v.cantidad > 0 ? v.monto / v.cantidad : 0
+  const getMargen = (v: any) => getPrecioUnitario(v) - (v.precio_costo || 0)
+
   const editarCampo = async (id: string, campo: string, valor: any) => {
     setVentas(ventas.map(v => v.id === id ? { ...v, [campo]: valor } : v))
     await supabase.from('ventas_especializadas').update({ [campo]: valor }).eq('id', id)
@@ -110,17 +114,22 @@ export default function ControlVentas() {
     if (!nueva.monto) { alert('Ingresa el monto'); return }
     if (!empresaId) { alert('Error: no se encontro la empresa'); return }
 
+    const precioUnitario = nueva.cantidad > 0 ? nueva.monto / nueva.cantidad : 0
+    const margen = precioUnitario - (nueva.precio_costo || 0)
+
     const { data, error } = await supabase.from('ventas_especializadas').insert([{
       empresa_id: empresaId,
       ...nueva,
       paciente_id: clienteNuevaSeleccionado ? clienteNuevaSeleccionado.id : null,
+      precio_unitario: precioUnitario,
+      margen
     }]).select().single()
     if (error) { alert('Error: ' + error.message); return }
     setVentas([data, ...ventas])
     setMostrarNueva(false)
     setClienteNuevaSeleccionado(null)
     setBusquedaClienteNueva('')
-    setNueva({ mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde' })
+    setNueva({ mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde', precio_costo: 0 })
   }
 
   const escapeCSV = (val: any) => {
@@ -130,8 +139,16 @@ export default function ControlVentas() {
   }
 
   const descargarCSV = () => {
-    const headers = ['Mes','Cliente','RUC/DNI','Ciudad','Vendedor','Monto','Cantidad','Facturado por','Fecha venta','Guia/Factura','Comentarios','Tipo pago','Cuotas','Fechas pago','Status']
-    const rows = filtradas.map(v => [v.mes||'', v.cliente||'', v.ruc_dni||'', v.ciudad||'', v.vendedor||'', v.monto||0, v.cantidad||0, v.facturado_por||'', v.fecha_venta||'', v.guia_factura||'', v.comentarios||'', v.tipo_pago||'', v.num_cuotas||0, v.fechas_pago||'', v.status||''])
+    const headers = ['Mes','Cliente','RUC/DNI','Ciudad','Vendedor','Monto','Cantidad','Precio Unit.','Costo','Margen','Facturado por','Fecha venta','Guia/Factura','Comentarios','Tipo pago','Cuotas','Fechas pago','Status']
+    const rows = filtradas.map(v => [
+      v.mes||'', v.cliente||'', v.ruc_dni||'', v.ciudad||'', v.vendedor||'',
+      v.monto||0, v.cantidad||0,
+      getPrecioUnitario(v).toFixed(2),
+      v.precio_costo||0,
+      getMargen(v).toFixed(2),
+      v.facturado_por||'', v.fecha_venta||'', v.guia_factura||'', v.comentarios||'',
+      v.tipo_pago||'', v.num_cuotas||0, v.fechas_pago||'', v.status||''
+    ])
     const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(escapeCSV).join(';')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -140,6 +157,8 @@ export default function ControlVentas() {
     a.download = 'control-ventas.csv'
     a.click()
   }
+
+  const thClass = "px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap"
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
@@ -193,14 +212,30 @@ export default function ControlVentas() {
             <table className="w-full text-sm border-collapse min-w-max">
               <thead>
                 <tr className="bg-gray-800">
-                  {['Mes','Cliente','RUC/DNI','Ciudad','Vendedor','Monto','Cant.','Facturado por','Fecha','Guia/Factura','Comentarios','Tipo pago','Cuotas','Fechas pago','Status',''].map(h => (
-                    <th key={h} className="px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap">{h}</th>
-                  ))}
+                  <th className={thClass}>Mes</th>
+                  <th className={thClass}>Cliente</th>
+                  <th className={thClass}>RUC/DNI</th>
+                  <th className={thClass}>Ciudad</th>
+                  <th className={thClass}>Vendedor</th>
+                  <th className={thClass}>Monto</th>
+                  <th className={thClass}>Cant.</th>
+                  <th className={thClass + ' text-blue-400'}>Precio Unit.</th>
+                  <th className={thClass + ' text-orange-400'}>Costo</th>
+                  <th className={thClass + ' text-green-400'}>Margen</th>
+                  <th className={thClass}>Facturado por</th>
+                  <th className={thClass}>Fecha</th>
+                  <th className={thClass}>Guia/Factura</th>
+                  <th className={thClass}>Comentarios</th>
+                  <th className={thClass}>Tipo pago</th>
+                  <th className={thClass}>Cuotas</th>
+                  <th className={thClass}>Fechas pago</th>
+                  <th className={thClass}>Status</th>
+                  <th className={thClass}></th>
                 </tr>
               </thead>
               <tbody>
                 {filtradas.length === 0 ? (
-                  <tr><td colSpan={16} className="px-4 py-12 text-center text-gray-400 text-sm">No hay ventas registradas</td></tr>
+                  <tr><td colSpan={19} className="px-4 py-12 text-center text-gray-400 text-sm">No hay ventas registradas</td></tr>
                 ) : filtradas.map((v) => (
                   <tr key={v.id} className="hover:bg-gray-800 border border-gray-700">
                     <td className="px-2 py-2 border border-gray-700">
@@ -209,7 +244,12 @@ export default function ControlVentas() {
                       </select>
                     </td>
                     <td className="px-2 py-2 border border-gray-700 relative">
-                      <input value={busquedaClienteTabla[v.id] !== undefined ? busquedaClienteTabla[v.id] : (v.cliente || '')} onChange={(e) => { setBusquedaClienteTabla({...busquedaClienteTabla, [v.id]: e.target.value}); editarCampo(v.id, 'cliente', e.target.value); setMostrarDropdownTabla(v.id) }} onFocus={() => setMostrarDropdownTabla(v.id)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32" />
+                      <input
+                        value={busquedaClienteTabla[v.id] !== undefined ? busquedaClienteTabla[v.id] : (v.cliente || '')}
+                        onChange={(e) => { setBusquedaClienteTabla({...busquedaClienteTabla, [v.id]: e.target.value}); editarCampo(v.id, 'cliente', e.target.value); setMostrarDropdownTabla(v.id) }}
+                        onFocus={() => setMostrarDropdownTabla(v.id)}
+                        className="bg-transparent text-white text-xs w-full focus:outline-none min-w-32"
+                      />
                       {mostrarDropdownTabla === v.id && (busquedaClienteTabla[v.id] || '').length > 0 && (
                         <div className="absolute top-full left-0 bg-gray-800 border border-gray-600 rounded-lg z-20 w-48 max-h-32 overflow-auto">
                           {clientesFiltradosTabla(busquedaClienteTabla[v.id] || '').map((c: any) => (
@@ -226,6 +266,30 @@ export default function ControlVentas() {
                     <td className="px-2 py-2 border border-gray-700"><input value={v.vendedor || ''} onChange={(e) => editarCampo(v.id, 'vendedor', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-20" /></td>
                     <td className="px-2 py-2 border border-gray-700"><input type="number" value={v.monto || 0} onChange={(e) => editarCampo(v.id, 'monto', Number(e.target.value))} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-16" /></td>
                     <td className="px-2 py-2 border border-gray-700"><input type="number" value={v.cantidad || 0} onChange={(e) => editarCampo(v.id, 'cantidad', Number(e.target.value))} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-12" /></td>
+
+                    {/* PRECIO UNITARIO — calculado automático */}
+                    <td className="px-2 py-2 border border-gray-700 text-blue-400 font-bold text-xs whitespace-nowrap">
+                      S/ {getPrecioUnitario(v).toFixed(2)}
+                    </td>
+
+                    {/* COSTO — editable */}
+                    <td className="px-2 py-2 border border-gray-700">
+                      <input
+                        type="number"
+                        value={v.precio_costo || ''}
+                        onChange={(e) => editarCampo(v.id, 'precio_costo', Number(e.target.value))}
+                        placeholder="0.00"
+                        className="bg-transparent text-orange-400 text-xs w-16 focus:outline-none border-b border-gray-700 focus:border-blue-500"
+                      />
+                    </td>
+
+                    {/* MARGEN — calculado automático */}
+                    <td className="px-2 py-2 border border-gray-700 text-xs font-bold whitespace-nowrap">
+                      <span className={getMargen(v) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                        S/ {getMargen(v).toFixed(2)}
+                      </span>
+                    </td>
+
                     <td className="px-2 py-2 border border-gray-700"><input value={v.facturado_por || ''} onChange={(e) => editarCampo(v.id, 'facturado_por', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" /></td>
                     <td className="px-2 py-2 border border-gray-700"><input type="date" value={v.fecha_venta || ''} onChange={(e) => editarCampo(v.id, 'fecha_venta', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-28" /></td>
                     <td className="px-2 py-2 border border-gray-700"><input value={v.guia_factura || ''} onChange={(e) => editarCampo(v.id, 'guia_factura', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" /></td>
@@ -258,7 +322,7 @@ export default function ControlVentas() {
                   <td colSpan={5} className="px-3 py-3 text-sm border border-gray-700">TOTAL</td>
                   <td className="px-3 py-3 text-sm text-green-400 border border-gray-700">S/ {totalMonto.toLocaleString()}</td>
                   <td className="px-3 py-3 text-sm text-blue-400 border border-gray-700">{totalCantidad}</td>
-                  <td colSpan={9} className="border border-gray-700"></td>
+                  <td colSpan={12} className="border border-gray-700"></td>
                 </tr>
               </tfoot>
             </table>
@@ -340,21 +404,42 @@ export default function ControlVentas() {
                   <input type="number" value={nueva.cantidad} onChange={(e) => setNueva({...nueva, cantidad: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Precio costo S/</label>
+                  <input type="number" value={nueva.precio_costo} onChange={(e) => setNueva({...nueva, precio_costo: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+
+              {/* Precio unitario calculado en tiempo real */}
+              {nueva.monto > 0 && nueva.cantidad > 0 && (
+                <div className="bg-gray-800 rounded-lg p-3 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-1">Precio unitario (auto)</p>
+                    <p className="text-blue-400 font-bold">S/ {(nueva.monto / nueva.cantidad).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-1">Margen (auto)</p>
+                    <p className={(nueva.monto / nueva.cantidad - nueva.precio_costo) >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                      S/ {(nueva.monto / nueva.cantidad - nueva.precio_costo).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <label className="text-xs text-gray-400 mb-1 block">Facturado por</label>
                   <input type="text" value={nueva.facturado_por} onChange={(e) => setNueva({...nueva, facturado_por: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Fecha venta</label>
                   <input type="date" value={nueva.fecha_venta} onChange={(e) => setNueva({...nueva, fecha_venta: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">N° Guia / Factura</label>
                   <input type="text" value={nueva.guia_factura} onChange={(e) => setNueva({...nueva, guia_factura: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Tipo de pago</label>
                   <select value={nueva.tipo_pago} onChange={(e) => setNueva({...nueva, tipo_pago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
@@ -362,6 +447,8 @@ export default function ControlVentas() {
                     <option value="credito">Credito</option>
                   </select>
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Status</label>
                   <select value={nueva.status} onChange={(e) => setNueva({...nueva, status: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
@@ -370,17 +457,17 @@ export default function ControlVentas() {
                     <option value="rojo">Rojo</option>
                   </select>
                 </div>
-              </div>
-              {nueva.tipo_pago === 'credito' && (
-                <div className="grid grid-cols-2 gap-4">
+                {nueva.tipo_pago === 'credito' && (
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Numero de cuotas</label>
                     <input type="number" min={2} value={nueva.num_cuotas || 2} onChange={(e) => setNueva({...nueva, num_cuotas: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                   </div>
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">Fechas de pago</label>
-                    <input type="text" placeholder="ej: 01/04/2025, 01/05/2025" value={nueva.fechas_pago} onChange={(e) => setNueva({...nueva, fechas_pago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                  </div>
+                )}
+              </div>
+              {nueva.tipo_pago === 'credito' && (
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Fechas de pago</label>
+                  <input type="text" placeholder="ej: 01/04/2025, 01/05/2025" value={nueva.fechas_pago} onChange={(e) => setNueva({...nueva, fechas_pago: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               )}
               <div>
