@@ -5,19 +5,19 @@ import { supabase, getEmpresaId } from '../../lib/supabase'
 
 export default function Envios() {
   const [menuAbierto, setMenuAbierto] = useState(false)
-  const [empresaId, setEmpresaId] = useState(null)
-  const [envios, setEnvios] = useState([])
-  const [clientes, setClientes] = useState([])
+  const [empresaId, setEmpresaId] = useState<string | null>(null)
+  const [envios, setEnvios] = useState<any[]>([])
+  const [clientes, setClientes] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
   const [mostrar, setMostrar] = useState(false)
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [busquedaCliente, setBusquedaCliente] = useState('')
-  const [clienteSeleccionado, setClienteSeleccionado] = useState(null)
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
   const [mostrarClientes, setMostrarClientes] = useState(false)
   const [filtros, setFiltros] = useState({ cliente: '', ciudad: '', fecha: '', codigo: '', numero: '', tema: '', empresa_envio: '', monto: '' })
   const [nuevo, setNuevo] = useState({
     ciudad: '', fecha: '', codigo_envio: '', numero_envio: '', tema: '',
-    empresa_envio: '', cantidad_paquetes: '1', monto: '', comentario: ''
+    empresa_envio: '', cantidad_paquetes: '', monto: '', comentario: ''
   })
 
   useEffect(() => { iniciar() }, [])
@@ -55,13 +55,13 @@ export default function Envios() {
     }])
     if (error) { alert('Error: ' + error.message); return }
     setMostrar(false)
-    setNuevo({ ciudad: '', fecha: '', codigo_envio: '', numero_envio: '', tema: '', empresa_envio: '', cantidad_paquetes: 1, monto: '', comentario: '' })
+    setNuevo({ ciudad: '', fecha: '', codigo_envio: '', numero_envio: '', tema: '', empresa_envio: '', cantidad_paquetes: '', monto: '', comentario: '' })
     setClienteSeleccionado(null)
     setBusquedaCliente('')
     iniciar()
   }
 
-  const eliminar = async (id) => {
+  const eliminar = async (id: string) => {
     if (!confirm('¿Eliminar este envío?')) return
     await supabase.from('envios').delete().eq('id', id)
     setEnvios(envios.filter(e => e.id !== id))
@@ -244,11 +244,11 @@ export default function Envios() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Cantidad de paquetes</label>
-                  <input type="number" min="1" value={nuevo.cantidad_paquetes} onChange={e => setNuevo({...nuevo, cantidad_paquetes: e.target.value})} className={inputClass} />
+                  <input type="text" value={nuevo.cantidad_paquetes} onChange={e => setNuevo({...nuevo, cantidad_paquetes: e.target.value})} className={inputClass} />
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Monto S/</label>
-                  <input type="number" value={nuevo.monto} onChange={e => setNuevo({...nuevo, monto: e.target.value})} className={inputClass} />
+                  <input type="text" value={nuevo.monto} onChange={e => setNuevo({...nuevo, monto: e.target.value})} className={inputClass} />
                 </div>
               </div>
               <div>
