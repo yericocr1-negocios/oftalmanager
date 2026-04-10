@@ -221,12 +221,24 @@ export default function Contabilidad() {
                 <table className="w-full">
                   <thead className="bg-gray-800">
                     <tr>
-                      <th className={thClass}>Fecha</th>
+                      <th className={thClass}>Mes</th>
                       <th className={thClass}>Cliente</th>
-                      <th className={thClass}>Guía / Factura</th>
-                      <th className={thClass}>Monto Venta</th>
+                      <th className={thClass}>RUC/DNI</th>
+                      <th className={thClass}>Ciudad</th>
+                      <th className={thClass}>Vendedor</th>
+                      <th className={thClass}>Monto</th>
                       <th className={thClass}>Impuesto 18%</th>
+                      <th className={thClass}>Cantidad</th>
+                      <th className={thClass}>Precio Unit.</th>
+                      <th className={thClass}>Costo</th>
+                      <th className={thClass}>Margen</th>
+                      <th className={thClass}>Facturado por</th>
+                      <th className={thClass}>Fecha</th>
+                      <th className={thClass}>Guía / Factura</th>
                       <th className={thClass}>Comentarios</th>
+                      <th className={thClass}>Cuotas</th>
+                      <th className={thClass}>Fechas pago</th>
+                      <th className={thClass}>Status</th>
                       <th className={thClass}>Eliminar</th>
                     </tr>
                   </thead>
@@ -237,22 +249,38 @@ export default function Contabilidad() {
                       <tr><td colSpan={7} className="text-center text-gray-400 py-12">No hay registros</td></tr>
                     ) : ventasFiltradas.map(v => (
                       <tr key={v.id} className="border-t border-gray-800 hover:bg-gray-800">
-                        <td className={tdClass}>{v.fecha}</td>
-                        <td className={tdClass}>{v.cliente || '-'}</td>
-                        <td className={tdClass}>{v.guia_factura || '-'}</td>
+                        <td className={tdClass}>{v.mes || '-'}</td>
+                        <td className={tdClass + ' font-medium'}>{v.cliente || '-'}</td>
+                        <td className={tdClass}>{v.ruc_dni || '-'}</td>
+                        <td className={tdClass}>{v.ciudad || '-'}</td>
+                        <td className={tdClass}>{v.vendedor || '-'}</td>
                         <td className={tdClass + ' text-green-400 font-bold'}>S/ {Number(v.monto_venta||0).toFixed(2)}</td>
                         <td className={tdClass + ' text-yellow-400'}>S/ {Number(v.impuesto||0).toFixed(2)}</td>
+                        <td className={tdClass + ' text-center'}>{v.cantidad || '-'}</td>
+                        <td className={tdClass + ' text-blue-400'}>S/ {Number(v.precio_unitario||0).toFixed(2)}</td>
+                        <td className={tdClass + ' text-orange-400'}>S/ {Number(v.precio_costo||0).toFixed(2)}</td>
+                        <td className={tdClass + ' font-bold'}>
+                          <span className={Number(v.margen||0) >= 0 ? 'text-green-400' : 'text-red-400'}>S/ {Number(v.margen||0).toFixed(2)}</span>
+                        </td>
+                        <td className={tdClass}>{v.facturado_por || '-'}</td>
+                        <td className={tdClass}>{v.fecha}</td>
+                        <td className={tdClass}>{v.guia_factura || '-'}</td>
                         <td className={tdClass}>{v.comentarios || '-'}</td>
+                        <td className={tdClass}>{v.num_cuotas || '-'}</td>
+                        <td className={tdClass}>{v.fechas_pago || '-'}</td>
+                        <td className={tdClass}>
+                          <span className={'text-xs px-2 py-1 rounded-full text-white ' + (v.status === 'verde' ? 'bg-green-600' : v.status === 'naranja' ? 'bg-orange-500' : v.status === 'rojo' ? 'bg-red-600' : 'bg-gray-600')}>{v.status || '-'}</span>
+                        </td>
                         <td className={tdClass}><button onClick={() => eliminarVenta(v.id)} className="text-red-400 hover:text-red-300 text-lg">🗑</button></td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-800 border-t border-gray-700">
-                      <td colSpan={3} className="px-3 py-3 text-xs text-gray-400 font-bold uppercase">Totales</td>
+                      <td colSpan={5} className="px-3 py-3 text-xs text-gray-400 font-bold uppercase">Totales</td>
                       <td className="px-3 py-3 text-sm font-bold text-green-400">S/ {totalVentas.toFixed(2)}</td>
                       <td className="px-3 py-3 text-sm font-bold text-yellow-400">S/ {totalImpuesto.toFixed(2)}</td>
-                      <td colSpan={2}></td>
+                      <td colSpan={12}></td>
                     </tr>
                   </tfoot>
                 </table>

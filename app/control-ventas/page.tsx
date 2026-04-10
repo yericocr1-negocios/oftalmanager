@@ -29,8 +29,7 @@ export default function ControlVentas() {
   const [nueva, setNueva] = useState({
     mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0,
     cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '',
-    tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde',
-    precio_costo: 0
+    tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde', precio_costo: 0
   })
 
   useEffect(() => { iniciar() }, [])
@@ -47,7 +46,6 @@ export default function ControlVentas() {
     if (eid) ventasQuery.eq('empresa_id', eid)
     const { data: ventasData } = await ventasQuery
     setVentas(ventasData || [])
-
     const clientesQuery = supabase.from('pacientes').select('id, nombres, apellidos, dni, ciudad').order('nombres')
     if (eid) clientesQuery.eq('empresa_id', eid)
     const { data: clientesData } = await clientesQuery
@@ -80,8 +78,9 @@ export default function ControlVentas() {
   const totalMonto = filtradas.reduce((sum, v) => sum + (v.monto || 0), 0)
   const totalCantidad = filtradas.reduce((sum, v) => sum + (v.cantidad || 0), 0)
 
+  // FÓRMULAS CORRECTAS
   const getPrecioUnitario = (v: any) => v.cantidad > 0 ? v.monto / v.cantidad : 0
-  const getMargen = (v: any) => getPrecioUnitario(v) - (v.precio_costo || 0)
+  const getMargen = (v: any) => (getPrecioUnitario(v) - (v.precio_costo || 0)) * (v.cantidad || 1)
 
   const editarCampo = async (id: string, campo: string, valor: any) => {
     setVentas(ventas.map(v => v.id === id ? { ...v, [campo]: valor } : v))
@@ -115,7 +114,8 @@ export default function ControlVentas() {
     if (!empresaId) { alert('Error: no se encontro la empresa'); return }
 
     const precioUnitario = nueva.cantidad > 0 ? nueva.monto / nueva.cantidad : 0
-    const margen = precioUnitario - (nueva.precio_costo || 0)
+    const margen = (precioUnitario - (nueva.precio_costo || 0)) * (nueva.cantidad || 1)
+    const impuesto = Math.round(nueva.monto * 0.18 * 100) / 100
 
     const { data, error } = await supabase.from('ventas_especializadas').insert([{
       empresa_id: empresaId,
@@ -124,7 +124,35 @@ export default function ControlVentas() {
       precio_unitario: precioUnitario,
       margen
     }]).select().single()
+
     if (error) { alert('Error: ' + error.message); return }
+
+    // Registrar automáticamente en contabilidad ventas
+    await supabase.from('contabilidad_ventas').insert([{
+      empresa_id: empresaId,
+      mes: nueva.mes,
+      cliente: nueva.cliente || (clienteNuevaSeleccionado ? clienteNuevaSeleccionado.nombres + ' ' + clienteNuevaSeleccionado.apellidos : ''),
+      ruc_dni: nueva.ruc_dni,
+      ciudad: nueva.ciudad,
+      vendedor: nueva.vendedor,
+      monto_venta: nueva.monto,
+      impuesto,
+      cantidad: nueva.cantidad,
+      precio_unitario: precioUnitario,
+      precio_costo: nueva.precio_costo || 0,
+      margen,
+      facturado_por: nueva.facturado_por,
+      fecha: nueva.fecha_venta || new Date().toISOString().split('T')[0],
+      guia_factura: nueva.guia_factura,
+      comentarios: nueva.comentarios,
+      tipo_pago: nueva.tipo_pago,
+      num_cuotas: nueva.num_cuotas,
+      fechas_pago: nueva.fechas_pago,
+      status: nueva.status,
+      origen: 'venta_especializada',
+      venta_especializada_id: data.id
+    }])
+
     setVentas([data, ...ventas])
     setMostrarNueva(false)
     setClienteNuevaSeleccionado(null)
@@ -159,6 +187,10 @@ export default function ControlVentas() {
   }
 
   const thClass = "px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap"
+
+  // Margen preview en formulario: (precio_unitario - costo) * cantidad
+  const previewPrecioUnit = nueva.cantidad > 0 ? nueva.monto / nueva.cantidad : 0
+  const previewMargen = (previewPrecioUnit - (nueva.precio_costo || 0)) * (nueva.cantidad || 1)
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
@@ -266,30 +298,17 @@ export default function ControlVentas() {
                     <td className="px-2 py-2 border border-gray-700"><input value={v.vendedor || ''} onChange={(e) => editarCampo(v.id, 'vendedor', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-20" /></td>
                     <td className="px-2 py-2 border border-gray-700"><input type="number" value={v.monto || 0} onChange={(e) => editarCampo(v.id, 'monto', Number(e.target.value))} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-16" /></td>
                     <td className="px-2 py-2 border border-gray-700"><input type="number" value={v.cantidad || 0} onChange={(e) => editarCampo(v.id, 'cantidad', Number(e.target.value))} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-12" /></td>
-
-                    {/* PRECIO UNITARIO — calculado automático */}
                     <td className="px-2 py-2 border border-gray-700 text-blue-400 font-bold text-xs whitespace-nowrap">
                       S/ {getPrecioUnitario(v).toFixed(2)}
                     </td>
-
-                    {/* COSTO — editable */}
                     <td className="px-2 py-2 border border-gray-700">
-                      <input
-                        type="number"
-                        value={v.precio_costo || ''}
-                        onChange={(e) => editarCampo(v.id, 'precio_costo', Number(e.target.value))}
-                        placeholder="0.00"
-                        className="bg-transparent text-orange-400 text-xs w-16 focus:outline-none border-b border-gray-700 focus:border-blue-500"
-                      />
+                      <input type="number" value={v.precio_costo || ''} onChange={(e) => editarCampo(v.id, 'precio_costo', Number(e.target.value))} placeholder="0.00" className="bg-transparent text-orange-400 text-xs w-16 focus:outline-none border-b border-gray-700 focus:border-blue-500" />
                     </td>
-
-                    {/* MARGEN — calculado automático */}
                     <td className="px-2 py-2 border border-gray-700 text-xs font-bold whitespace-nowrap">
                       <span className={getMargen(v) >= 0 ? 'text-green-400' : 'text-red-400'}>
                         S/ {getMargen(v).toFixed(2)}
                       </span>
                     </td>
-
                     <td className="px-2 py-2 border border-gray-700"><input value={v.facturado_por || ''} onChange={(e) => editarCampo(v.id, 'facturado_por', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" /></td>
                     <td className="px-2 py-2 border border-gray-700"><input type="date" value={v.fecha_venta || ''} onChange={(e) => editarCampo(v.id, 'fecha_venta', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-28" /></td>
                     <td className="px-2 py-2 border border-gray-700"><input value={v.guia_factura || ''} onChange={(e) => editarCampo(v.id, 'guia_factura', e.target.value)} className="bg-transparent text-white text-xs w-full focus:outline-none min-w-24" /></td>
@@ -348,14 +367,7 @@ export default function ControlVentas() {
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Cliente</label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Buscar cliente registrado..."
-                      value={clienteNuevaSeleccionado ? clienteNuevaSeleccionado.nombres + ' ' + clienteNuevaSeleccionado.apellidos : busquedaClienteNueva}
-                      onChange={(e) => { setBusquedaClienteNueva(e.target.value); setClienteNuevaSeleccionado(null); setMostrarDropdownNueva(true); setNueva({...nueva, cliente: e.target.value}) }}
-                      onFocus={() => setMostrarDropdownNueva(true)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                    />
+                    <input type="text" placeholder="Buscar cliente registrado..." value={clienteNuevaSeleccionado ? clienteNuevaSeleccionado.nombres + ' ' + clienteNuevaSeleccionado.apellidos : busquedaClienteNueva} onChange={(e) => { setBusquedaClienteNueva(e.target.value); setClienteNuevaSeleccionado(null); setMostrarDropdownNueva(true); setNueva({...nueva, cliente: e.target.value}) }} onFocus={() => setMostrarDropdownNueva(true)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                     {mostrarDropdownNueva && busquedaClienteNueva && (
                       <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 z-20 max-h-36 overflow-auto">
                         {clientesFiltradosNueva.map((c: any) => (
@@ -409,17 +421,20 @@ export default function ControlVentas() {
                 </div>
               </div>
 
-              {/* Precio unitario calculado en tiempo real */}
               {nueva.monto > 0 && nueva.cantidad > 0 && (
-                <div className="bg-gray-800 rounded-lg p-3 grid grid-cols-2 gap-4">
+                <div className="bg-gray-800 rounded-lg p-3 grid grid-cols-3 gap-4">
                   <div>
                     <p className="text-xs text-gray-400 mb-1">Precio unitario (auto)</p>
-                    <p className="text-blue-400 font-bold">S/ {(nueva.monto / nueva.cantidad).toFixed(2)}</p>
+                    <p className="text-blue-400 font-bold">S/ {previewPrecioUnit.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-1">Impuesto 18%</p>
+                    <p className="text-yellow-400 font-bold">S/ {(nueva.monto * 0.18).toFixed(2)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-400 mb-1">Margen (auto)</p>
-                    <p className={(nueva.monto / nueva.cantidad - nueva.precio_costo) >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                      S/ {(nueva.monto / nueva.cantidad - nueva.precio_costo).toFixed(2)}
+                    <p className={previewMargen >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                      S/ {previewMargen.toFixed(2)}
                     </p>
                   </div>
                 </div>
