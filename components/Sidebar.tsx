@@ -14,7 +14,6 @@ const menuCompleto = [
   { icon: '📈', label: 'Reportes', href: '/reportes', key: 'reportes', roles: ['admin'] },
   { icon: '🧾', label: 'Contabilidad', href: '/contabilidad', key: 'contabilidad', roles: ['admin'] },
   { icon: '📬', label: 'Envíos', href: '/envios', key: 'envios', roles: ['admin'] },
-  { icon: '🧮', label: 'Tributario', href: '/tributario', key: 'tributario', roles: ['admin'] },
   { icon: '⚙️', label: 'Config', href: '/configuracion', key: 'configuracion', roles: ['admin'] },
 ]
 
