@@ -29,7 +29,7 @@ export default function ControlVentas() {
   const [nueva, setNueva] = useState({
     mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0,
     cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '',
-    tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde', precio_costo: 0
+    tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde', precio_costo: 0, envio: 0
   })
 
   useEffect(() => { iniciar() }, [])
@@ -78,9 +78,9 @@ export default function ControlVentas() {
   const totalMonto = filtradas.reduce((sum, v) => sum + (v.monto || 0), 0)
   const totalCantidad = filtradas.reduce((sum, v) => sum + (v.cantidad || 0), 0)
 
-  // FÓRMULAS CORRECTAS
+  // FÓRMULAS
   const getPrecioUnitario = (v: any) => v.cantidad > 0 ? v.monto / v.cantidad : 0
-  const getMargen = (v: any) => (getPrecioUnitario(v) - (v.precio_costo || 0)) * (v.cantidad || 1)
+  const getMargen = (v: any) => ((getPrecioUnitario(v) - (v.precio_costo || 0)) * (v.cantidad || 1)) - (v.envio || 0)
 
   const editarCampo = async (id: string, campo: string, valor: any) => {
     setVentas(ventas.map(v => v.id === id ? { ...v, [campo]: valor } : v))
@@ -114,24 +114,43 @@ export default function ControlVentas() {
     if (!empresaId) { alert('Error: no se encontro la empresa'); return }
 
     const precioUnitario = nueva.cantidad > 0 ? nueva.monto / nueva.cantidad : 0
-    const margen = (precioUnitario - (nueva.precio_costo || 0)) * (nueva.cantidad || 1)
+    const margen = ((precioUnitario - (nueva.precio_costo || 0)) * (nueva.cantidad || 1)) - (nueva.envio || 0)
     const impuesto = Math.round(nueva.monto * 0.18 * 100) / 100
+    const clienteNombre = clienteNuevaSeleccionado
+      ? clienteNuevaSeleccionado.nombres + ' ' + clienteNuevaSeleccionado.apellidos
+      : nueva.cliente
 
     const { data, error } = await supabase.from('ventas_especializadas').insert([{
       empresa_id: empresaId,
-      ...nueva,
-      paciente_id: clienteNuevaSeleccionado ? clienteNuevaSeleccionado.id : null,
+      mes: nueva.mes,
+      cliente: clienteNombre,
+      ruc_dni: nueva.ruc_dni,
+      ciudad: nueva.ciudad,
+      vendedor: nueva.vendedor,
+      monto: nueva.monto,
+      cantidad: nueva.cantidad,
+      facturado_por: nueva.facturado_por,
+      fecha_venta: nueva.fecha_venta,
+      guia_factura: nueva.guia_factura,
+      comentarios: nueva.comentarios,
+      tipo_pago: nueva.tipo_pago,
+      num_cuotas: nueva.num_cuotas,
+      fechas_pago: nueva.fechas_pago,
+      status: nueva.status,
+      precio_costo: nueva.precio_costo || 0,
       precio_unitario: precioUnitario,
-      margen
+      margen,
+      envio: nueva.envio || 0,
+      paciente_id: clienteNuevaSeleccionado ? clienteNuevaSeleccionado.id : null,
     }]).select().single()
 
     if (error) { alert('Error: ' + error.message); return }
 
-    // Registrar automáticamente en contabilidad ventas
+    // Registrar en contabilidad ventas automáticamente
     await supabase.from('contabilidad_ventas').insert([{
       empresa_id: empresaId,
       mes: nueva.mes,
-      cliente: nueva.cliente || (clienteNuevaSeleccionado ? clienteNuevaSeleccionado.nombres + ' ' + clienteNuevaSeleccionado.apellidos : ''),
+      cliente: clienteNombre,
       ruc_dni: nueva.ruc_dni,
       ciudad: nueva.ciudad,
       vendedor: nueva.vendedor,
@@ -157,7 +176,7 @@ export default function ControlVentas() {
     setMostrarNueva(false)
     setClienteNuevaSeleccionado(null)
     setBusquedaClienteNueva('')
-    setNueva({ mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde', precio_costo: 0 })
+    setNueva({ mes: meses[new Date().getMonth()], cliente: '', ruc_dni: '', ciudad: '', vendedor: '', monto: 0, cantidad: 1, facturado_por: '', fecha_venta: '', guia_factura: '', comentarios: '', tipo_pago: 'directo', num_cuotas: 0, fechas_pago: '', status: 'verde', precio_costo: 0, envio: 0 })
   }
 
   const escapeCSV = (val: any) => {
@@ -167,13 +186,11 @@ export default function ControlVentas() {
   }
 
   const descargarCSV = () => {
-    const headers = ['Mes','Cliente','RUC/DNI','Ciudad','Vendedor','Monto','Cantidad','Precio Unit.','Costo','Margen','Facturado por','Fecha venta','Guia/Factura','Comentarios','Tipo pago','Cuotas','Fechas pago','Status']
+    const headers = ['Mes','Cliente','RUC/DNI','Ciudad','Vendedor','Monto','Cantidad','Precio Unit.','Costo','Envio','Margen','Facturado por','Fecha venta','Guia/Factura','Comentarios','Tipo pago','Cuotas','Fechas pago','Status']
     const rows = filtradas.map(v => [
       v.mes||'', v.cliente||'', v.ruc_dni||'', v.ciudad||'', v.vendedor||'',
-      v.monto||0, v.cantidad||0,
-      getPrecioUnitario(v).toFixed(2),
-      v.precio_costo||0,
-      getMargen(v).toFixed(2),
+      v.monto||0, v.cantidad||0, getPrecioUnitario(v).toFixed(2),
+      v.precio_costo||0, v.envio||0, getMargen(v).toFixed(2),
       v.facturado_por||'', v.fecha_venta||'', v.guia_factura||'', v.comentarios||'',
       v.tipo_pago||'', v.num_cuotas||0, v.fechas_pago||'', v.status||''
     ])
@@ -187,10 +204,8 @@ export default function ControlVentas() {
   }
 
   const thClass = "px-3 py-3 text-left text-xs text-gray-400 uppercase border border-gray-700 whitespace-nowrap"
-
-  // Margen preview en formulario: (precio_unitario - costo) * cantidad
   const previewPrecioUnit = nueva.cantidad > 0 ? nueva.monto / nueva.cantidad : 0
-  const previewMargen = (previewPrecioUnit - (nueva.precio_costo || 0)) * (nueva.cantidad || 1)
+  const previewMargen = ((previewPrecioUnit - (nueva.precio_costo || 0)) * (nueva.cantidad || 1)) - (nueva.envio || 0)
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
@@ -253,6 +268,7 @@ export default function ControlVentas() {
                   <th className={thClass}>Cant.</th>
                   <th className={thClass + ' text-blue-400'}>Precio Unit.</th>
                   <th className={thClass + ' text-orange-400'}>Costo</th>
+                  <th className={thClass + ' text-purple-400'}>Envío</th>
                   <th className={thClass + ' text-green-400'}>Margen</th>
                   <th className={thClass}>Facturado por</th>
                   <th className={thClass}>Fecha</th>
@@ -267,7 +283,7 @@ export default function ControlVentas() {
               </thead>
               <tbody>
                 {filtradas.length === 0 ? (
-                  <tr><td colSpan={19} className="px-4 py-12 text-center text-gray-400 text-sm">No hay ventas registradas</td></tr>
+                  <tr><td colSpan={20} className="px-4 py-12 text-center text-gray-400 text-sm">No hay ventas registradas</td></tr>
                 ) : filtradas.map((v) => (
                   <tr key={v.id} className="hover:bg-gray-800 border border-gray-700">
                     <td className="px-2 py-2 border border-gray-700">
@@ -303,6 +319,9 @@ export default function ControlVentas() {
                     </td>
                     <td className="px-2 py-2 border border-gray-700">
                       <input type="number" value={v.precio_costo || ''} onChange={(e) => editarCampo(v.id, 'precio_costo', Number(e.target.value))} placeholder="0.00" className="bg-transparent text-orange-400 text-xs w-16 focus:outline-none border-b border-gray-700 focus:border-blue-500" />
+                    </td>
+                    <td className="px-2 py-2 border border-gray-700">
+                      <input type="number" value={v.envio || ''} onChange={(e) => editarCampo(v.id, 'envio', Number(e.target.value))} placeholder="0.00" className="bg-transparent text-purple-400 text-xs w-16 focus:outline-none border-b border-gray-700 focus:border-blue-500" />
                     </td>
                     <td className="px-2 py-2 border border-gray-700 text-xs font-bold whitespace-nowrap">
                       <span className={getMargen(v) >= 0 ? 'text-green-400' : 'text-red-400'}>
@@ -341,7 +360,7 @@ export default function ControlVentas() {
                   <td colSpan={5} className="px-3 py-3 text-sm border border-gray-700">TOTAL</td>
                   <td className="px-3 py-3 text-sm text-green-400 border border-gray-700">S/ {totalMonto.toLocaleString()}</td>
                   <td className="px-3 py-3 text-sm text-blue-400 border border-gray-700">{totalCantidad}</td>
-                  <td colSpan={12} className="border border-gray-700"></td>
+                  <td colSpan={13} className="border border-gray-700"></td>
                 </tr>
               </tfoot>
             </table>
@@ -410,7 +429,7 @@ export default function ControlVentas() {
                   <input type="number" value={nueva.monto} onChange={(e) => setNueva({...nueva, monto: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Cantidad</label>
                   <input type="number" value={nueva.cantidad} onChange={(e) => setNueva({...nueva, cantidad: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -418,6 +437,10 @@ export default function ControlVentas() {
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Precio costo S/</label>
                   <input type="number" value={nueva.precio_costo} onChange={(e) => setNueva({...nueva, precio_costo: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Envío S/</label>
+                  <input type="number" value={nueva.envio} onChange={(e) => setNueva({...nueva, envio: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
 
