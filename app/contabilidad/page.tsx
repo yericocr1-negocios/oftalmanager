@@ -12,11 +12,9 @@ export default function Contabilidad() {
   const [empresaId, setEmpresaId] = useState<string|null>(null)
   const [cargando, setCargando] = useState(true)
 
-  // Ventas
+  // Ventas — directo desde ventas_especializadas
   const [ventas, setVentas] = useState<any[]>([])
-  const [mostrarVenta, setMostrarVenta] = useState(false)
-  const [filtroVentas, setFiltroVentas] = useState({ fecha: '', cliente: '', guia: '', monto: '', comentarios: '' })
-  const [nuevaVenta, setNuevaVenta] = useState({ fecha: '', cliente: '', guia_factura: '', monto_venta: '', comentarios: '' })
+  const [filtroVentas, setFiltroVentas] = useState({ mes: '', cliente: '', ciudad: '', vendedor: '', guia: '', status: '' })
 
   // Compras
   const [compras, setCompras] = useState<any[]>([])
@@ -27,7 +25,7 @@ export default function Contabilidad() {
   // Renta
   const [filtroRentaMes, setFiltroRentaMes] = useState('todos')
 
-  // Impuestos (tributario)
+  // Impuestos
   const [regimen, setRegimen] = useState('RMT')
   const [ventasImp, setVentasImp] = useState('')
   const [comprasImp, setComprasImp] = useState('')
@@ -43,31 +41,23 @@ export default function Contabilidad() {
 
   const cargarDatos = async (eid: string|null) => {
     setCargando(true)
-    const { data: ventasData } = await supabase.from('contabilidad_ventas').select('*').eq('empresa_id', eid).order('fecha', { ascending: false })
-    setVentas(ventasData || [])
-    const { data: comprasData } = await supabase.from('contabilidad_compras').select('*').eq('empresa_id', eid).order('fecha', { ascending: false })
-    setCompras(comprasData || [])
-    setCargando(false)
-  }
 
-  const guardarVenta = async () => {
-    if (!nuevaVenta.fecha || !nuevaVenta.monto_venta) { alert('Fecha y monto son obligatorios'); return }
-    const monto = parseFloat(nuevaVenta.monto_venta) || 0
-    const impuesto = Math.round(monto * 0.18 * 100) / 100
-    const { error } = await supabase.from('contabilidad_ventas').insert([{
-      empresa_id: empresaId,
-      fecha: nuevaVenta.fecha,
-      cliente: nuevaVenta.cliente,
-      guia_factura: nuevaVenta.guia_factura,
-      monto_venta: monto,
-      impuesto,
-      comentarios: nuevaVenta.comentarios,
-      origen: 'manual'
-    }])
-    if (error) { alert('Error: ' + error.message); return }
-    setMostrarVenta(false)
-    setNuevaVenta({ fecha: '', cliente: '', guia_factura: '', monto_venta: '', comentarios: '' })
-    cargarDatos(empresaId)
+    // Ventas desde ventas_especializadas directamente
+    const { data: ventasData } = await supabase
+      .from('ventas_especializadas')
+      .select('*')
+      .eq('empresa_id', eid)
+      .order('created_at', { ascending: false })
+    setVentas(ventasData || [])
+
+    const { data: comprasData } = await supabase
+      .from('contabilidad_compras')
+      .select('*')
+      .eq('empresa_id', eid)
+      .order('fecha', { ascending: false })
+    setCompras(comprasData || [])
+
+    setCargando(false)
   }
 
   const guardarCompra = async () => {
@@ -83,24 +73,23 @@ export default function Contabilidad() {
     cargarDatos(empresaId)
   }
 
-  const eliminarVenta = async (id: string) => {
-    if (!confirm('¿Eliminar este registro?')) return
-    await supabase.from('contabilidad_ventas').delete().eq('id', id)
-    setVentas(ventas.filter(v => v.id !== id))
-  }
-
   const eliminarCompra = async (id: string) => {
     if (!confirm('¿Eliminar este registro?')) return
     await supabase.from('contabilidad_compras').delete().eq('id', id)
     setCompras(compras.filter(c => c.id !== id))
   }
 
+  // Fórmulas ventas especializadas
+  const getPrecioUnitario = (v: any) => v.cantidad > 0 ? v.monto / v.cantidad : 0
+  const getMargen = (v: any) => ((getPrecioUnitario(v) - (v.precio_costo || 0)) * (v.cantidad || 1)) - (v.envio || 0)
+
   const ventasFiltradas = ventas.filter(v =>
-    (filtroVentas.fecha === '' || (v.fecha || '').includes(filtroVentas.fecha)) &&
+    (filtroVentas.mes === '' || (v.mes || '').toLowerCase().includes(filtroVentas.mes.toLowerCase())) &&
     (filtroVentas.cliente === '' || (v.cliente || '').toLowerCase().includes(filtroVentas.cliente.toLowerCase())) &&
+    (filtroVentas.ciudad === '' || (v.ciudad || '').toLowerCase().includes(filtroVentas.ciudad.toLowerCase())) &&
+    (filtroVentas.vendedor === '' || (v.vendedor || '').toLowerCase().includes(filtroVentas.vendedor.toLowerCase())) &&
     (filtroVentas.guia === '' || (v.guia_factura || '').toLowerCase().includes(filtroVentas.guia.toLowerCase())) &&
-    (filtroVentas.monto === '' || String(v.monto_venta || '').includes(filtroVentas.monto)) &&
-    (filtroVentas.comentarios === '' || (v.comentarios || '').toLowerCase().includes(filtroVentas.comentarios.toLowerCase()))
+    (filtroVentas.status === '' || v.status === filtroVentas.status)
   )
 
   const comprasFiltradas = compras.filter(c =>
@@ -112,50 +101,37 @@ export default function Contabilidad() {
     (filtroCompras.monto === '' || String(c.monto || '').includes(filtroCompras.monto))
   )
 
-  const totalVentas = ventasFiltradas.reduce((s, v) => s + (v.monto_venta || 0), 0)
-  const totalImpuesto = ventasFiltradas.reduce((s, v) => s + (v.impuesto || 0), 0)
+  const totalVentas = ventasFiltradas.reduce((s, v) => s + (v.monto || 0), 0)
+  const totalImpuesto = ventasFiltradas.reduce((s, v) => s + Math.round(v.monto * 0.18 * 100) / 100, 0)
   const totalCompras = comprasFiltradas.reduce((s, c) => s + (c.monto || 0), 0)
 
   const rentaPorMes = meses.map((mes, idx) => {
-    const mesNum = String(idx + 1).padStart(2, '0')
-    const vMes = ventas.filter(v => v.fecha && v.fecha.slice(5,7) === mesNum).reduce((s,v) => s+(v.monto_venta||0), 0)
-    const cMes = compras.filter(c => c.fecha && c.fecha.slice(5,7) === mesNum).reduce((s,c) => s+(c.monto||0), 0)
+    const vMes = ventas.filter(v => v.mes === mes).reduce((s, v) => s + (v.monto || 0), 0)
+    const cMes = compras.filter(c => c.fecha && meses[parseInt(c.fecha.slice(5,7)) - 1] === mes).reduce((s, c) => s + (c.monto || 0), 0)
     return { mes, ventas: vMes, compras: cMes, renta: vMes - cMes }
   }).filter(r => filtroRentaMes === 'todos' || r.mes === filtroRentaMes)
 
-  // ── CÁLCULO TRIBUTARIO ──
   const calcular = () => {
     const v = parseFloat(ventasImp) || 0
     const c = parseFloat(comprasImp) || 0
     const utilidad = v - c
     let resultado: any = { ventas: v, compras: c, utilidad, regimen }
-
     if (regimen === 'NRUS') {
       const cuota = v <= 5000 ? 20 : v <= 8000 ? 50 : 0
       resultado = { ...resultado, cuota, totalImpuestos: cuota, igv: 0, renta: 0 }
     } else if (regimen === 'RER') {
-      const igvVentas = v * 0.18
-      const igvCompras = c * 0.18
-      const igv = igvVentas - igvCompras
-      const renta = v * 0.015
+      const igvVentas = v * 0.18; const igvCompras = c * 0.18; const igv = igvVentas - igvCompras; const renta = v * 0.015
       resultado = { ...resultado, igvVentas, igvCompras, igv, renta, totalImpuestos: igv + renta }
     } else if (regimen === 'RMT') {
-      const igvVentas = v * 0.18
-      const igvCompras = c * 0.18
-      const igv = igvVentas - igvCompras
-      const rentaMensual = v * 0.01
+      const igvVentas = v * 0.18; const igvCompras = c * 0.18; const igv = igvVentas - igvCompras; const rentaMensual = v * 0.01
       const limite15UIT = 15 * UIT
       const rentaAnual = utilidad * 12 <= limite15UIT ? utilidad * 12 * 0.10 : limite15UIT * 0.10 + (utilidad * 12 - limite15UIT) * 0.295
       resultado = { ...resultado, igvVentas, igvCompras, igv, rentaMensual, rentaAnual: rentaAnual / 12, totalImpuestos: igv + rentaMensual }
     } else if (regimen === 'RG') {
-      const igvVentas = v * 0.18
-      const igvCompras = c * 0.18
-      const igv = igvVentas - igvCompras
-      const renta = v * 0.015
+      const igvVentas = v * 0.18; const igvCompras = c * 0.18; const igv = igvVentas - igvCompras; const renta = v * 0.015
       const rentaAnual = utilidad * 12 * 0.295
       resultado = { ...resultado, igvVentas, igvCompras, igv, renta, rentaAnual: rentaAnual / 12, totalImpuestos: igv + renta }
     }
-
     resultado.utilidadNeta = utilidad - (resultado.totalImpuestos || 0)
     setCalculado(resultado)
   }
@@ -193,7 +169,6 @@ export default function Contabilidad() {
             </div>
           </div>
           <div>
-            {tab === 'ventas' && <button onClick={() => setMostrarVenta(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Agregar venta</button>}
             {tab === 'compras' && <button onClick={() => setMostrarCompra(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Agregar compra</button>}
           </div>
         </div>
@@ -207,18 +182,27 @@ export default function Contabilidad() {
             ))}
           </div>
 
-          {/* ── VENTAS ── */}
+          {/* ── VENTAS desde ventas_especializadas ── */}
           {tab === 'ventas' && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="p-4 border-b border-gray-700 grid grid-cols-2 md:grid-cols-5 gap-2">
-                <input placeholder="Filtrar fecha..." value={filtroVentas.fecha} onChange={e => setFiltroVentas({...filtroVentas, fecha: e.target.value})} className={filterClass} />
-                <input placeholder="Filtrar cliente..." value={filtroVentas.cliente} onChange={e => setFiltroVentas({...filtroVentas, cliente: e.target.value})} className={filterClass} />
-                <input placeholder="Filtrar guía..." value={filtroVentas.guia} onChange={e => setFiltroVentas({...filtroVentas, guia: e.target.value})} className={filterClass} />
-                <input placeholder="Filtrar monto..." value={filtroVentas.monto} onChange={e => setFiltroVentas({...filtroVentas, monto: e.target.value})} className={filterClass} />
-                <input placeholder="Filtrar comentarios..." value={filtroVentas.comentarios} onChange={e => setFiltroVentas({...filtroVentas, comentarios: e.target.value})} className={filterClass} />
+              <div className="px-4 py-3 border-b border-gray-700 bg-blue-900 bg-opacity-30">
+                <p className="text-xs text-blue-400">📊 Datos sincronizados en tiempo real desde Control de Ventas — {ventasFiltradas.length} registros</p>
+              </div>
+              <div className="p-4 border-b border-gray-700 grid grid-cols-2 md:grid-cols-6 gap-2">
+                <input placeholder="Mes..." value={filtroVentas.mes} onChange={e => setFiltroVentas({...filtroVentas, mes: e.target.value})} className={filterClass} />
+                <input placeholder="Cliente..." value={filtroVentas.cliente} onChange={e => setFiltroVentas({...filtroVentas, cliente: e.target.value})} className={filterClass} />
+                <input placeholder="Ciudad..." value={filtroVentas.ciudad} onChange={e => setFiltroVentas({...filtroVentas, ciudad: e.target.value})} className={filterClass} />
+                <input placeholder="Vendedor..." value={filtroVentas.vendedor} onChange={e => setFiltroVentas({...filtroVentas, vendedor: e.target.value})} className={filterClass} />
+                <input placeholder="Guía/Factura..." value={filtroVentas.guia} onChange={e => setFiltroVentas({...filtroVentas, guia: e.target.value})} className={filterClass} />
+                <select value={filtroVentas.status} onChange={e => setFiltroVentas({...filtroVentas, status: e.target.value})} className={filterClass}>
+                  <option value="">Todos los status</option>
+                  <option value="verde">Verde</option>
+                  <option value="naranja">Naranja</option>
+                  <option value="rojo">Rojo</option>
+                </select>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-max">
                   <thead className="bg-gray-800">
                     <tr>
                       <th className={thClass}>Mes</th>
@@ -231,6 +215,7 @@ export default function Contabilidad() {
                       <th className={thClass}>Cantidad</th>
                       <th className={thClass}>Precio Unit.</th>
                       <th className={thClass}>Costo</th>
+                      <th className={thClass}>Envío</th>
                       <th className={thClass}>Margen</th>
                       <th className={thClass}>Facturado por</th>
                       <th className={thClass}>Fecha</th>
@@ -239,14 +224,17 @@ export default function Contabilidad() {
                       <th className={thClass}>Cuotas</th>
                       <th className={thClass}>Fechas pago</th>
                       <th className={thClass}>Status</th>
-                      <th className={thClass}>Eliminar</th>
                     </tr>
                   </thead>
                   <tbody>
                     {cargando ? (
-                      <tr><td colSpan={7} className="text-center text-gray-400 py-12">Cargando...</td></tr>
+                      <tr><td colSpan={19} className="text-center text-gray-400 py-12">Cargando...</td></tr>
                     ) : ventasFiltradas.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center text-gray-400 py-12">No hay registros</td></tr>
+                      <tr><td colSpan={19} className="text-center text-gray-400 py-12">
+                        <p className="text-4xl mb-3">📊</p>
+                        <p>No hay ventas registradas</p>
+                        <a href="/control-ventas" className="mt-3 inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Ir a Control de Ventas</a>
+                      </td></tr>
                     ) : ventasFiltradas.map(v => (
                       <tr key={v.id} className="border-t border-gray-800 hover:bg-gray-800">
                         <td className={tdClass}>{v.mes || '-'}</td>
@@ -254,24 +242,26 @@ export default function Contabilidad() {
                         <td className={tdClass}>{v.ruc_dni || '-'}</td>
                         <td className={tdClass}>{v.ciudad || '-'}</td>
                         <td className={tdClass}>{v.vendedor || '-'}</td>
-                        <td className={tdClass + ' text-green-400 font-bold'}>S/ {Number(v.monto_venta||0).toFixed(2)}</td>
-                        <td className={tdClass + ' text-yellow-400'}>S/ {Number(v.impuesto||0).toFixed(2)}</td>
+                        <td className={tdClass + ' text-green-400 font-bold'}>S/ {Number(v.monto||0).toFixed(2)}</td>
+                        <td className={tdClass + ' text-yellow-400'}>S/ {(Number(v.monto||0) * 0.18).toFixed(2)}</td>
                         <td className={tdClass + ' text-center'}>{v.cantidad || '-'}</td>
-                        <td className={tdClass + ' text-blue-400'}>S/ {Number(v.precio_unitario||0).toFixed(2)}</td>
+                        <td className={tdClass + ' text-blue-400'}>S/ {getPrecioUnitario(v).toFixed(2)}</td>
                         <td className={tdClass + ' text-orange-400'}>S/ {Number(v.precio_costo||0).toFixed(2)}</td>
+                        <td className={tdClass + ' text-purple-400'}>S/ {Number(v.envio||0).toFixed(2)}</td>
                         <td className={tdClass + ' font-bold'}>
-                          <span className={Number(v.margen||0) >= 0 ? 'text-green-400' : 'text-red-400'}>S/ {Number(v.margen||0).toFixed(2)}</span>
+                          <span className={getMargen(v) >= 0 ? 'text-green-400' : 'text-red-400'}>S/ {getMargen(v).toFixed(2)}</span>
                         </td>
                         <td className={tdClass}>{v.facturado_por || '-'}</td>
-                        <td className={tdClass}>{v.fecha}</td>
+                        <td className={tdClass}>{v.fecha_venta || '-'}</td>
                         <td className={tdClass}>{v.guia_factura || '-'}</td>
                         <td className={tdClass}>{v.comentarios || '-'}</td>
                         <td className={tdClass}>{v.num_cuotas || '-'}</td>
                         <td className={tdClass}>{v.fechas_pago || '-'}</td>
                         <td className={tdClass}>
-                          <span className={'text-xs px-2 py-1 rounded-full text-white ' + (v.status === 'verde' ? 'bg-green-600' : v.status === 'naranja' ? 'bg-orange-500' : v.status === 'rojo' ? 'bg-red-600' : 'bg-gray-600')}>{v.status || '-'}</span>
+                          <span className={'text-xs px-2 py-1 rounded-full text-white ' + (v.status === 'verde' ? 'bg-green-600' : v.status === 'naranja' ? 'bg-orange-500' : v.status === 'rojo' ? 'bg-red-600' : 'bg-gray-600')}>
+                            {v.status || '-'}
+                          </span>
                         </td>
-                        <td className={tdClass}><button onClick={() => eliminarVenta(v.id)} className="text-red-400 hover:text-red-300 text-lg">🗑</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -375,7 +365,7 @@ export default function Contabilidad() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-800 border-t border-gray-700">
-                      <td className="px-3 py-3 text-xs text-gray-400 font-bold uppercase">Total Renta</td>
+                      <td className="px-3 py-3 text-xs text-gray-400 font-bold uppercase">Total</td>
                       <td className="px-3 py-3 text-sm font-bold text-green-400">S/ {rentaPorMes.reduce((s,r)=>s+r.ventas,0).toFixed(2)}</td>
                       <td className="px-3 py-3 text-sm font-bold text-red-400">S/ {rentaPorMes.reduce((s,r)=>s+r.compras,0).toFixed(2)}</td>
                       <td className={'px-3 py-3 text-sm font-bold ' + (rentaPorMes.reduce((s,r)=>s+r.renta,0)>=0?'text-blue-400':'text-red-500')}>
@@ -412,9 +402,7 @@ export default function Contabilidad() {
                     </select>
                   </div>
                 </div>
-                <button onClick={calcular} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium">
-                  Calcular impuestos
-                </button>
+                <button onClick={calcular} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium">Calcular impuestos</button>
               </div>
 
               {calculado && (
@@ -439,53 +427,18 @@ export default function Contabilidad() {
                   </div>
 
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                    <h3 className="font-semibold mb-4">Detalle de impuestos — {calculado.regimen}</h3>
+                    <h3 className="font-semibold mb-4">Detalle — {calculado.regimen}</h3>
                     <div className="space-y-3">
-                      {calculado.regimen === 'NRUS' && (
-                        <div className="flex justify-between items-center border-b border-gray-800 pb-3">
-                          <span className="text-sm text-gray-300">Cuota fija mensual</span>
-                          <span className="font-bold text-red-400">S/ {(calculado.cuota||0).toFixed(2)}</span>
-                        </div>
-                      )}
-                      {calculado.igvVentas !== undefined && (
-                        <div className="flex justify-between items-center border-b border-gray-800 pb-3">
-                          <span className="text-sm text-gray-300">IGV ventas (18%)</span>
-                          <span className="text-yellow-400">S/ {(calculado.igvVentas||0).toFixed(2)}</span>
-                        </div>
-                      )}
-                      {calculado.igvCompras !== undefined && (
-                        <div className="flex justify-between items-center border-b border-gray-800 pb-3">
-                          <span className="text-sm text-gray-300">IGV compras — crédito fiscal</span>
-                          <span className="text-green-400">- S/ {(calculado.igvCompras||0).toFixed(2)}</span>
-                        </div>
-                      )}
-                      {calculado.igv !== undefined && (
-                        <div className="flex justify-between items-center border-b border-gray-800 pb-3">
-                          <span className="text-sm font-medium">IGV a pagar</span>
-                          <span className="font-bold text-red-400">S/ {(calculado.igv||0).toFixed(2)}</span>
-                        </div>
-                      )}
-                      {(calculado.renta || calculado.rentaMensual) && (
-                        <div className="flex justify-between items-center border-b border-gray-800 pb-3">
-                          <span className="text-sm text-gray-300">Renta mensual ({calculado.regimen==='RMT'?'1%':'1.5%'} de ventas)</span>
-                          <span className="text-red-400">S/ {(calculado.renta||calculado.rentaMensual||0).toFixed(2)}</span>
-                        </div>
-                      )}
-                      {calculado.rentaAnual !== undefined && (
-                        <div className="flex justify-between items-center border-b border-gray-800 pb-3">
-                          <span className="text-sm text-gray-300">Renta anual estimada (mensualizado)</span>
-                          <span className="text-orange-400">S/ {(calculado.rentaAnual||0).toFixed(2)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center pt-2">
-                        <span className="text-sm font-bold">Total impuestos del mes</span>
-                        <span className="text-lg font-bold text-red-400">S/ {(calculado.totalImpuestos||0).toFixed(2)}</span>
-                      </div>
+                      {calculado.regimen === 'NRUS' && <div className="flex justify-between border-b border-gray-800 pb-3"><span className="text-sm text-gray-300">Cuota fija</span><span className="font-bold text-red-400">S/ {(calculado.cuota||0).toFixed(2)}</span></div>}
+                      {calculado.igvVentas !== undefined && <div className="flex justify-between border-b border-gray-800 pb-3"><span className="text-sm text-gray-300">IGV ventas (18%)</span><span className="text-yellow-400">S/ {(calculado.igvVentas||0).toFixed(2)}</span></div>}
+                      {calculado.igvCompras !== undefined && <div className="flex justify-between border-b border-gray-800 pb-3"><span className="text-sm text-gray-300">IGV compras — crédito fiscal</span><span className="text-green-400">- S/ {(calculado.igvCompras||0).toFixed(2)}</span></div>}
+                      {calculado.igv !== undefined && <div className="flex justify-between border-b border-gray-800 pb-3"><span className="text-sm font-medium">IGV a pagar</span><span className="font-bold text-red-400">S/ {(calculado.igv||0).toFixed(2)}</span></div>}
+                      {(calculado.renta || calculado.rentaMensual) && <div className="flex justify-between border-b border-gray-800 pb-3"><span className="text-sm text-gray-300">Renta mensual ({calculado.regimen==='RMT'?'1%':'1.5%'})</span><span className="text-red-400">S/ {(calculado.renta||calculado.rentaMensual||0).toFixed(2)}</span></div>}
+                      {calculado.rentaAnual !== undefined && <div className="flex justify-between border-b border-gray-800 pb-3"><span className="text-sm text-gray-300">Renta anual estimada (mensualizado)</span><span className="text-orange-400">S/ {(calculado.rentaAnual||0).toFixed(2)}</span></div>}
+                      <div className="flex justify-between pt-2"><span className="text-sm font-bold">Total impuestos del mes</span><span className="text-lg font-bold text-red-400">S/ {(calculado.totalImpuestos||0).toFixed(2)}</span></div>
                     </div>
-                    <div className={'mt-4 rounded-lg p-3 text-sm ' + (calculado.totalImpuestos/calculado.ventas>0.2 ? 'bg-red-900 border border-red-700 text-red-300' : 'bg-green-900 border border-green-700 text-green-300')}>
-                      {calculado.totalImpuestos/calculado.ventas>0.2
-                        ? '⚠️ Estás pagando más del 20% de tus ventas en impuestos. Considera revisar tu régimen tributario.'
-                        : '✅ Tu carga tributaria está dentro de un rango saludable para tu nivel de ventas.'}
+                    <div className={'mt-4 rounded-lg p-3 text-sm ' + (calculado.totalImpuestos/calculado.ventas>0.2?'bg-red-900 border border-red-700 text-red-300':'bg-green-900 border border-green-700 text-green-300')}>
+                      {calculado.totalImpuestos/calculado.ventas>0.2 ? '⚠️ Estás pagando más del 20% de tus ventas en impuestos.' : '✅ Tu carga tributaria está dentro de un rango saludable.'}
                     </div>
                   </div>
 
@@ -506,7 +459,7 @@ export default function Contabilidad() {
                           </div>
                         ))}
                       </div>
-                      <p className="text-xs text-gray-500 mt-3">* Simulación referencial. Consulta con un contador para decisiones formales.</p>
+                      <p className="text-xs text-gray-500 mt-3">* Simulación referencial.</p>
                     </div>
                   )}
                 </>
@@ -516,54 +469,6 @@ export default function Contabilidad() {
         </div>
       </div>
 
-      {/* Modal agregar venta */}
-      {mostrarVenta && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold">Agregar venta</h3>
-              <button onClick={() => setMostrarVenta(false)} className="text-gray-400 hover:text-white text-xl">X</button>
-            </div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Fecha</label>
-                  <input type="date" value={nuevaVenta.fecha} onChange={e => setNuevaVenta({...nuevaVenta, fecha: e.target.value})} className={inputClass} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Cliente</label>
-                  <input type="text" value={nuevaVenta.cliente} onChange={e => setNuevaVenta({...nuevaVenta, cliente: e.target.value})} className={inputClass} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Guía / Factura</label>
-                  <input type="text" value={nuevaVenta.guia_factura} onChange={e => setNuevaVenta({...nuevaVenta, guia_factura: e.target.value})} className={inputClass} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Monto de venta S/</label>
-                  <input type="number" value={nuevaVenta.monto_venta} onChange={e => setNuevaVenta({...nuevaVenta, monto_venta: e.target.value})} className={inputClass} />
-                </div>
-              </div>
-              {nuevaVenta.monto_venta && (
-                <div className="bg-yellow-900 border border-yellow-700 rounded-lg px-4 py-2">
-                  <p className="text-yellow-400 text-sm">Impuesto 18%: <span className="font-bold">S/ {(parseFloat(nuevaVenta.monto_venta)*0.18).toFixed(2)}</span></p>
-                </div>
-              )}
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Comentarios</label>
-                <textarea value={nuevaVenta.comentarios} onChange={e => setNuevaVenta({...nuevaVenta, comentarios: e.target.value})} className={inputClass + ' h-20'} />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setMostrarVenta(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm">Cancelar</button>
-              <button onClick={guardarVenta} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium">Guardar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal agregar compra */}
       {mostrarCompra && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
